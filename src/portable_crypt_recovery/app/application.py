@@ -11,7 +11,10 @@ def run_app(argv: list[str]) -> int:
 
     PySide6 is imported lazily so backend tests can run without creating a GUI.
     """
-    ensure_default_portable_layout()
+    from portable_crypt_recovery.app.startup import try_auto_open_workspace
+
+    app_root = ensure_default_portable_layout()
+    try_auto_open_workspace(app_root)
 
     try:
         from PySide6.QtWidgets import QApplication
