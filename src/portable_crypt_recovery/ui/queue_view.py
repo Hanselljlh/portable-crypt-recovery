@@ -53,12 +53,15 @@ class QueueView:  # pragma: no cover
                 # Status row
                 self.lbl_status = QLabel("Queue stopped")
                 self.lbl_running = QLabel("No job running")
+                self.lbl_remaining = QLabel("")
                 self.progress_bar = QProgressBar()
                 self.progress_bar.setRange(0, 100)
                 self.progress_bar.setValue(0)
                 status_row = QHBoxLayout()
                 status_row.addWidget(self.lbl_status)
                 status_row.addStretch()
+                status_row.addWidget(self.lbl_remaining)
+                status_row.addSpacing(16)
                 status_row.addWidget(self.lbl_running)
                 layout.addLayout(status_row)
                 layout.addWidget(self.progress_bar)
@@ -312,6 +315,10 @@ class QueueView:  # pragma: no cover
                 self.lbl_running.setText("No job running")
                 self.progress_bar.setValue(0)
                 self._refresh_list()
+                # Reset title to baseline (refresh_list will set it if jobs exist)
+                from portable_crypt_recovery import __app_name__, __version__
+                if not self.lbl_remaining.text():
+                    self.window().setWindowTitle(f"{__app_name__} {__version__}")
 
             # ------------------------------------------------------------------
             # Skip / Restart individual jobs
@@ -756,6 +763,33 @@ class QueueView:  # pragma: no cover
                     )
                 else:
                     self.job_list.verticalScrollBar().setValue(scroll_pos)
+
+                # --- Jobs remaining counter ---
+                total_jobs = len(qs.queue_order)
+                pending_jobs = sum(
+                    1 for jid in qs.queue_order
+                    if qs.jobs.get(jid) and qs.jobs[jid].status in ("pending", "running")
+                )
+                done_jobs = total_jobs - pending_jobs
+                if total_jobs > 0:
+                    remaining_text = (
+                        f"{pending_jobs} remaining  /  {total_jobs} total"
+                        if pending_jobs > 0
+                        else f"All {total_jobs} job(s) done"
+                    )
+                    self.lbl_remaining.setText(remaining_text)
+                    # Update window title bar
+                    from portable_crypt_recovery import __app_name__, __version__
+                    title_suffix = (
+                        f" — {pending_jobs} remaining"
+                        if pending_jobs > 0
+                        else f" — {done_jobs} done"
+                    )
+                    self.window().setWindowTitle(
+                        f"{__app_name__} {__version__}{title_suffix}"
+                    )
+                else:
+                    self.lbl_remaining.setText("")
 
             # ------------------------------------------------------------------
             # Button state management
