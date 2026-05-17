@@ -80,8 +80,8 @@ class SettingsView:  # pragma: no cover
                 "detect_keywords": ["cuda"],
                 "miss_keywords": ["cuda.version.: n/a", "no cuda", "cuda not available"],
                 "description": "GeForce, RTX, Quadro — fastest option by far",
-                "url": "https://www.nvidia.com/en-us/drivers/",
-                "url_label": "nvidia.com/drivers",
+                "url": "https://developer.nvidia.com/cuda-downloads",
+                "url_label": "CUDA Toolkit Downloads",
             },
             {
                 "hardware": "AMD GPU",
