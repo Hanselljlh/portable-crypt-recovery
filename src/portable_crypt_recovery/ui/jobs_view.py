@@ -256,22 +256,32 @@ class JobsView:  # pragma: no cover
                     if not mode_set.entries:
                         continue  # skip headers with no valid modes
 
-                    jobs = expand_jobs(
-                        target_id=draft["target_id"],
-                        header_id=header_id,
-                        mode_set=mode_set,
-                        pim_set=pim_set,
-                        keyfile_sets=keyfile_sets,
-                        password_source=password_source,
-                        workspace_root=ws,
-                    )
+                    # Build the ordered list of keyfile iterations to expand.
+                    # When keyfiles are present, always try without any keyfile
+                    # first — it's the cheapest way to rule out "no keyfile needed".
+                    # Then follow with every keyfile combination.
+                    kf_iterations: list = [None]  # no-keyfile attempt always first
+                    if keyfile_sets:
+                        kf_iterations += list(keyfile_sets)
 
-                    for job in jobs:
-                        job.draft_id = draft.get("draft_id", "")
-                        job.draft_label = draft.get("label", "")
-                        qs.jobs[job.job_id] = job
-                        qs.queue_order.append(job.job_id)
-                        all_jobs.append(job)
+                    for kf_iter in kf_iterations:
+                        iter_sets = None if kf_iter is None else [kf_iter]
+                        jobs = expand_jobs(
+                            target_id=draft["target_id"],
+                            header_id=header_id,
+                            mode_set=mode_set,
+                            pim_set=pim_set,
+                            keyfile_sets=iter_sets,
+                            password_source=password_source,
+                            workspace_root=ws,
+                        )
+
+                        for job in jobs:
+                            job.draft_id = draft.get("draft_id", "")
+                            job.draft_label = draft.get("label", "")
+                            qs.jobs[job.job_id] = job
+                            qs.queue_order.append(job.job_id)
+                            all_jobs.append(job)
 
                 if not all_jobs:
                     raise ValueError("No hash modes available for any selected header.")
@@ -780,8 +790,10 @@ class _NewJobDraftDialog:  # pragma: no cover
                         pim_count = max(len(pim_set.values), 1)
                     else:
                         pim_count = 1
+                    # kf_count: no-keyfile attempt (always 1) + all non-empty combos
+                    # = 2^n  (e.g. 0 keyfiles→1, 1 keyfile→2, 2 keyfiles→4)
                     n_kf = len(keyfile_paths)
-                    kf_count = max(1, (2 ** n_kf) - 1) if n_kf > 0 else 1
+                    kf_count = 2 ** n_kf
                     estimated_job_count = total_modes * pim_count * kf_count
                 except Exception:
                     estimated_job_count = 0
