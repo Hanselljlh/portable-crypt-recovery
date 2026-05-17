@@ -183,11 +183,13 @@ class QueueView:  # pragma: no cover
                 # any code changes (flags, paths) take effect immediately rather
                 # than reusing a stale array stored in queue-state.json.
                 device_ids = state.hashcat_setup.selected_device_ids or None
+                use_opt = state.hashcat_setup.use_optimized_kernels
                 errors: list[str] = []
                 for job in pending:
                     try:
                         job.command_array = build_command_with_devices(
-                            job, hashcat_exe, ws, device_ids
+                            job, hashcat_exe, ws, device_ids,
+                            use_optimized_kernels=use_opt,
                         )
                     except CommandBuilderError as exc:
                         errors.append(f"{job.job_id[:8]}: {exc}")

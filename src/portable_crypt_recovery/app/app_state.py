@@ -82,6 +82,10 @@ class AppState:
         )
         if raw_ids:
             self.hashcat_setup.selected_device_ids = [int(d) for d in raw_ids]
+        if "use_optimized_kernels" in settings:
+            self.hashcat_setup.use_optimized_kernels = bool(
+                settings["use_optimized_kernels"]
+            )
 
 
 # Module-level singleton

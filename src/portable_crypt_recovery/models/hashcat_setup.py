@@ -16,6 +16,8 @@ class HashcatSetup:
     verified: bool = False
     verified_timestamp: str | None = None
     selected_device_ids: list[int] = field(default_factory=list)
+    # Performance flags passed to hashcat at run time
+    use_optimized_kernels: bool = True   # -O  (2-4× faster; max ~31-char passwords)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -26,6 +28,7 @@ class HashcatSetup:
             "verified": self.verified,
             "verified_timestamp": self.verified_timestamp,
             "selected_device_ids": self.selected_device_ids,
+            "use_optimized_kernels": self.use_optimized_kernels,
         }
 
     @classmethod
@@ -37,4 +40,5 @@ class HashcatSetup:
             verified=data.get("verified", False),
             verified_timestamp=data.get("verified_timestamp"),
             selected_device_ids=data.get("selected_device_ids", []),
+            use_optimized_kernels=data.get("use_optimized_kernels", True),
         )

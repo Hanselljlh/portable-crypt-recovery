@@ -18,6 +18,7 @@ def build_command(
     job: QueuedJob,
     hashcat_executable: Path,
     workspace_root: Path,
+    use_optimized_kernels: bool = True,
 ) -> list[str]:
     """Build a Hashcat argument array for a QueuedJob.
 
@@ -65,12 +66,21 @@ def build_command(
     args += ["--session", job.session_name]
     args += ["--restore-disable"]
 
+    # Optimized kernels: SIMD-optimized code paths, 2-4× faster.
+    # Trade-off: max password length is limited to ~31 characters.
+    if use_optimized_kernels:
+        args += ["-O"]
+
+    # Disable GPU hardware monitoring — avoids sensor-polling overhead and
+    # driver errors on headless / virtual machines.
+    args += ["--hwmon-disable"]
+
     # Limit wordlist segment size to cap RAM usage.
     # Hashcat default loads the whole wordlist into RAM; 512 MB is a safe ceiling
     # that still allows good throughput while keeping memory pressure manageable.
     args += ["--segment-size", "512"]
 
-    # Status
+    # Status output
     args += ["--status", "--status-json"]
 
     # Device selection
@@ -119,9 +129,10 @@ def build_command_with_devices(
     hashcat_executable: Path,
     workspace_root: Path,
     device_ids: list[int] | None = None,
+    use_optimized_kernels: bool = True,
 ) -> list[str]:
     """Build command array, appending -d device args if device_ids is specified."""
-    args = build_command(job, hashcat_executable, workspace_root)
+    args = build_command(job, hashcat_executable, workspace_root, use_optimized_kernels)
     if device_ids:
         args += ["-d", ",".join(str(d) for d in device_ids)]
     return args

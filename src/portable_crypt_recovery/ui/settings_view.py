@@ -131,6 +131,21 @@ class SettingsView:  # pragma: no cover
                 hc_layout.addWidget(self.lbl_hc_version)
                 hc_layout.addWidget(self.lbl_hc_devices)
 
+                # Performance flags
+                self.chk_optimized_kernels = QCheckBox(
+                    "Optimized kernels  (-O)  —  2-4× faster; limits passwords to ≤31 characters"
+                )
+                self.chk_optimized_kernels.setChecked(True)
+                self.chk_optimized_kernels.setToolTip(
+                    "Enables hashcat's -O flag (--optimized-kernel-enable).\n"
+                    "Uses SIMD-optimized code paths for significantly higher hash-rates.\n"
+                    "Passwords longer than ~31 characters will NOT be found when this is on.\n"
+                    "Uncheck if you believe the password exceeds 31 characters."
+                )
+                hc_layout.addWidget(self.chk_optimized_kernels)
+                self.btn_save_hc_perf = QPushButton("Save Performance Settings")
+                hc_layout.addWidget(self.btn_save_hc_perf)
+
                 layout.addWidget(hc_group)
 
                 # ── Workspace ─────────────────────────────────────────────
@@ -184,6 +199,7 @@ class SettingsView:  # pragma: no cover
                 self.btn_verify_hc.clicked.connect(self._verify_hashcat)
                 self.btn_scan_devices.clicked.connect(self._scan_devices)
                 self.btn_download_page.clicked.connect(self._open_download_page)
+                self.btn_save_hc_perf.clicked.connect(self._save_hc_perf)
                 self.btn_create_ws.clicked.connect(self._create_workspace)
                 self.btn_open_ws.clicked.connect(self._open_workspace)
                 self.btn_save_prefs.clicked.connect(self._save_preferences)
@@ -212,6 +228,7 @@ class SettingsView:  # pragma: no cover
                     self.lbl_hc_devices.setText(
                         f"Selected devices: {', '.join(str(d) for d in hc.selected_device_ids)}"
                     )
+                self.chk_optimized_kernels.setChecked(hc.use_optimized_kernels)
                 if state.workspace_root:
                     self.lbl_ws_info.setText(
                         f"{state.workspace_name}\n{state.workspace_root}"
@@ -220,6 +237,30 @@ class SettingsView:  # pragma: no cover
                 behavior = state.queue_behavior_after_crack
                 self.cmb_crack_behavior.setCurrentIndex(
                     0 if "continue" in behavior else 1
+                )
+
+            def _save_hc_perf(self):
+                """Save performance settings (optimized kernels toggle)."""
+                import json
+
+                from PySide6.QtWidgets import QMessageBox
+                state = self._state()
+                hc = state.hashcat_setup
+                hc.use_optimized_kernels = self.chk_optimized_kernels.isChecked()
+                if state.workspace_root:
+                    settings_path = state.workspace_root / "settings.json"
+                    try:
+                        data = json.loads(settings_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        data = {"schema_version": 1}
+                    data["use_optimized_kernels"] = hc.use_optimized_kernels
+                    from portable_crypt_recovery.core.atomic_write import atomic_write_json
+                    atomic_write_json(settings_path, data)
+                flag = "ON  (-O active)" if hc.use_optimized_kernels else "OFF (no -O, max password length unlimited)"
+                QMessageBox.information(
+                    self, "Saved",
+                    f"Optimized kernels: {flag}\n\n"
+                    "Takes effect on the next Start Queue."
                 )
 
             def _persist_hashcat_settings(self):
@@ -238,6 +279,7 @@ class SettingsView:  # pragma: no cover
                 data["hashcat_verified"] = hc.verified
                 data["hashcat_version"] = hc.version_string
                 data["selected_device_ids"] = hc.selected_device_ids
+                data["use_optimized_kernels"] = hc.use_optimized_kernels
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 atomic_write_json(settings_path, data)
 
