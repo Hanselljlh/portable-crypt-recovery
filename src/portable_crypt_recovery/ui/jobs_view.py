@@ -495,13 +495,19 @@ class _NewJobDraftDialog:  # pragma: no cover
 
             def _add_keyfile(self) -> None:
                 from PySide6.QtWidgets import QListWidgetItem
-                path, _ = QFileDialog.getOpenFileName(
-                    self, "Select Keyfile", "", "All Files (*.*)"
+                paths, _ = QFileDialog.getOpenFileNames(
+                    self, "Select Keyfile(s)", "", "All Files (*.*)"
                 )
-                if path:
-                    item = QListWidgetItem(path)
-                    item.setData(256, path)
-                    self.kf_list.addItem(item)
+                existing = {
+                    self.kf_list.item(i).data(256)
+                    for i in range(self.kf_list.count())
+                }
+                for path in paths:
+                    if path and path not in existing:
+                        item = QListWidgetItem(path)
+                        item.setData(256, path)
+                        self.kf_list.addItem(item)
+                        existing.add(path)
 
             def _remove_keyfile(self) -> None:
                 row = self.kf_list.currentRow()
