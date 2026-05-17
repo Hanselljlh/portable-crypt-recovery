@@ -135,29 +135,29 @@ class QueueRunner:
 
         log_path = self._workspace_root / job.log_path
 
-        # Keep all hashcat temp/cache writes inside the portable workspace.
-        # cwd → hashcat's working directory so it resolves relative paths there.
-        # TEMP/TMP/TMPDIR → workspace tmp dir so OS-level temp writes stay local.
-        # HASHCAT_CACHE_PATH → workspace kernels dir so compiled OpenCL kernels
-        #   don't scatter across the user profile.
-        hashcat_dir = self._workspace_root / "hashcat"
-        tmp_dir = hashcat_dir / "tmp"
-        kernels_dir = hashcat_dir / "kernels"
+        # cwd MUST be the directory containing hashcat.exe so that hashcat can
+        # resolve ./OpenCL/, ./modules/, and other relative data paths it ships
+        # with.  Using a workspace sub-folder as CWD causes immediate exit with
+        # "./OpenCL/: No such file or directory".
+        hashcat_exe_dir = self._hashcat_exe.parent
+
+        # Keep OS-level temp writes inside the portable workspace so no
+        # artefacts end up in the user profile or system TEMP.
+        ws_hashcat = self._workspace_root / "hashcat"
+        tmp_dir = ws_hashcat / "tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
-        kernels_dir.mkdir(parents=True, exist_ok=True)
 
         extra_env: dict[str, str] = {
             "TEMP": str(tmp_dir),
             "TMP": str(tmp_dir),
             "TMPDIR": str(tmp_dir),
-            "HASHCAT_CACHE_PATH": str(kernels_dir),
         }
 
         with self._lock:
             self._current_runner = HashcatProcessRunner(
                 args=args,
                 log_path=log_path,
-                cwd=hashcat_dir,
+                cwd=hashcat_exe_dir,
                 extra_env=extra_env,
             )
             self._current_runner.start()
