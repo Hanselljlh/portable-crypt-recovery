@@ -3,7 +3,6 @@
 import pytest
 
 from portable_crypt_recovery.services.builders.password_builder import (
-    PasswordLimitBlocked,
     PasswordLimitConfirmRequired,
     PasswordLimitWarning,
     build_generated_password_source,

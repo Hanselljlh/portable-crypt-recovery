@@ -11,7 +11,7 @@ from portable_crypt_recovery.services.builders.hash_mode_builder import (
 
 def test_truecrypt_nonsystem_modes_are_valid():
     ms = build_mode_set("truecrypt", "normal_volume_header")
-    modes = {e.mode for e in ms.entries}
+    {e.mode for e in ms.entries}
     # All entries should be truecrypt family
     assert all(e.family == "truecrypt" for e in ms.entries)
     # Should have entries

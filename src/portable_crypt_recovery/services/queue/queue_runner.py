@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from portable_crypt_recovery.core.atomic_write import atomic_write_json
 from portable_crypt_recovery.core.timestamps import utc_now_iso

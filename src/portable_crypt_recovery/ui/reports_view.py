@@ -7,6 +7,7 @@ class ReportsView:  # pragma: no cover
     """List of cracked-job reports with Refresh/Export/View-Folder actions."""
 
     def __new__(cls, workspace_root=None):
+        from PySide6.QtCore import Qt
         from PySide6.QtWidgets import (
             QHBoxLayout,
             QLabel,
@@ -17,7 +18,6 @@ class ReportsView:  # pragma: no cover
             QVBoxLayout,
             QWidget,
         )
-        from PySide6.QtCore import Qt
 
         class _ReportsView(QWidget):
             def __init__(self, workspace_root=None) -> None:
@@ -82,7 +82,6 @@ class ReportsView:  # pragma: no cover
                     self._reports = []
 
                 for r in self._reports:
-                    from PySide6.QtWidgets import QListWidgetItem
                     cracked = r.get("cracked_password")
                     cracked_label = "CRACKED" if cracked else "no password"
                     label = (
@@ -125,7 +124,9 @@ class ReportsView:  # pragma: no cover
 
             def _copy_password(self) -> None:
                 import json
+
                 from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.core.clipboard import copy_with_auto_clear
 
@@ -173,8 +174,8 @@ class ReportsView:  # pragma: no cover
 
             def _view_folder(self) -> None:
                 import os
-                import sys
                 import subprocess
+                import sys
                 ws = self._workspace()
                 row = self.report_list.currentRow()
                 if ws is None or not hasattr(self, "_reports") or row < 0:
@@ -194,6 +195,7 @@ class ReportsView:  # pragma: no cover
 
             def _export(self) -> None:
                 import shutil
+
                 from PySide6.QtWidgets import QFileDialog, QMessageBox
                 ws = self._workspace()
                 row = self.report_list.currentRow()

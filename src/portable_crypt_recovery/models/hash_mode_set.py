@@ -49,7 +49,7 @@ class HashModeSet:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "HashModeSet":
+    def from_dict(cls, data: dict[str, Any]) -> HashModeSet:
         entries = [
             HashModeEntry(
                 mode=e["mode"],

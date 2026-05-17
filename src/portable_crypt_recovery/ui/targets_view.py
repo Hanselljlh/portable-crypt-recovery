@@ -55,6 +55,7 @@ class TargetsView:  # pragma: no cover
 
             def _open_add_wizard(self) -> None:
                 from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.ui.add_volume_wizard import AddVolumeWizard
 
@@ -75,13 +76,14 @@ class TargetsView:  # pragma: no cover
 
             def _process_wizard_result(self, result, state) -> None:
                 from pathlib import Path
+
                 from PySide6.QtWidgets import QMessageBox
 
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 from portable_crypt_recovery.core.ids import new_id
                 from portable_crypt_recovery.core.timestamps import utc_now_iso
-                from portable_crypt_recovery.core.atomic_write import atomic_write_json
-                from portable_crypt_recovery.models.target import Target
                 from portable_crypt_recovery.models.header import Header
+                from portable_crypt_recovery.models.target import Target
                 from portable_crypt_recovery.services.headers import extraction, import_header
                 from portable_crypt_recovery.services.headers.metadata import save_header_metadata
                 from portable_crypt_recovery.workspace import cleanup_manifest
@@ -198,7 +200,7 @@ class TargetsView:  # pragma: no cover
                 self._refresh_list()
 
                 n = len(extracted_headers)
-                err_note = f"\n\nWarnings:\n" + "\n".join(errors) if errors else ""
+                err_note = "\n\nWarnings:\n" + "\n".join(errors) if errors else ""
                 QMessageBox.information(
                     self,
                     "Volume Added",
@@ -212,10 +214,9 @@ class TargetsView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _refresh_list(self) -> None:
-                from pathlib import Path
                 import json
+
                 from portable_crypt_recovery.app.app_state import get_app_state
-                from PySide6.QtWidgets import QListWidgetItem
 
                 self.target_list.clear()
                 state = get_app_state()
@@ -245,11 +246,13 @@ class TargetsView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _view_headers(self) -> None:
-                from PySide6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QLabel, QListWidget
-                import json
+
+                from PySide6.QtWidgets import QDialog, QLabel, QListWidget, QMessageBox, QVBoxLayout
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.services.headers.metadata import (
-                    list_header_ids, load_header_metadata,
+                    list_header_ids,
+                    load_header_metadata,
                 )
 
                 item = self.target_list.currentItem()
@@ -272,7 +275,9 @@ class TargetsView:  # pragma: no cover
                         pass
 
                 if not headers:
-                    QMessageBox.information(self, "View Headers", "No headers found for this target.")
+                    QMessageBox.information(
+                        self, "View Headers", "No headers found for this target."
+                    )
                     return
 
                 dlg = QDialog(self)
@@ -282,10 +287,13 @@ class TargetsView:  # pragma: no cover
                 lst = QListWidget()
                 for h in headers:
                     lst.addItem(
-                        f"{h.candidate_type}  |  {h.workspace_relative_path}  |  sha256: {h.sha256[:16]}…"
+                        f"{h.candidate_type}  |  {h.workspace_relative_path}"
+                        f"  |  sha256: {h.sha256[:16]}…"
                     )
                 lay.addWidget(lst)
-                lay.addWidget(QLabel("Headers are 512-byte normalized copies stored inside the workspace."))
+                lay.addWidget(QLabel(
+                    "Headers are 512-byte normalized copies stored inside the workspace."
+                ))
                 dlg.exec()
 
             # ------------------------------------------------------------------
@@ -303,7 +311,8 @@ class TargetsView:  # pragma: no cover
                     "Remove Target",
                     "Target removal is not yet implemented.\n"
                     "To manually remove a target, delete its entry from targets/targets.json "
-                    "and the corresponding header files from headers/normalized/ and headers/metadata/.",
+                    "and the corresponding header files from "
+                    "headers/normalized/ and headers/metadata/.",
                 )
 
         return _TargetsView()

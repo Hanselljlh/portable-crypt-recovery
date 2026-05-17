@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.paths import to_workspace_relative
@@ -80,10 +80,7 @@ def import_header_file(
                 f"File is {file_size} bytes — could not find any 512-byte-aligned candidates."
             )
 
-        if pick_offset_callback is not None:
-            chosen_offset = pick_offset_callback(candidates)
-        else:
-            chosen_offset = 0
+        chosen_offset = pick_offset_callback(candidates) if pick_offset_callback is not None else 0
 
         data_512 = raw[chosen_offset : chosen_offset + HEADER_SIZE_BYTES]
         if len(data_512) != HEADER_SIZE_BYTES:

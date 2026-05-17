@@ -33,7 +33,7 @@ class Report:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Report":
+    def from_dict(cls, data: dict[str, Any]) -> Report:
         return cls(
             report_id=data["report_id"],
             job_id=data["job_id"],

@@ -59,7 +59,10 @@ def test_make_queue_state_saver_writes_file(tmp_path):
     queue_dir = ws / "queue"
     queue_dir.mkdir()
 
-    test_data = {"schema_version": 1, "queue_order": [], "jobs": {}, "status": "stopped", "current_running_job": None}
+    test_data = {
+        "schema_version": 1, "queue_order": [], "jobs": {},
+        "status": "stopped", "current_running_job": None,
+    }
 
     save_fn = make_queue_state_saver(ws, lambda: test_data)
     save_fn()

@@ -6,7 +6,7 @@ import re
 import subprocess
 from pathlib import Path
 
-# Pattern: "  13711 | VeraCrypt PBKDF2-HMAC-RIPEMD160 + XTS 512-bit            | Full-Disk Encryption (FDE)"
+# Pattern: "  13711 | VeraCrypt PBKDF2-HMAC-RIPEMD160 + XTS 512-bit  | Full-Disk Encryption (FDE)"  # noqa: E501
 _MODE_LINE_RE = re.compile(r"^\s*(\d+)\s*\|\s*(.+?)\s*\|")
 
 

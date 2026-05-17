@@ -29,7 +29,7 @@ class HashcatSetup:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "HashcatSetup":
+    def from_dict(cls, data: dict[str, Any]) -> HashcatSetup:
         return cls(
             executable_path=data.get("executable_path"),
             is_portable=data.get("is_portable", False),

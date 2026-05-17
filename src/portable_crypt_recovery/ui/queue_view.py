@@ -7,6 +7,7 @@ class QueueView:  # pragma: no cover
     """Queued job list with Start/Pause/Stop/Resume/Skip/Restart controls."""
 
     def __new__(cls):
+        from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import (
             QGroupBox,
             QHBoxLayout,
@@ -17,7 +18,6 @@ class QueueView:  # pragma: no cover
             QVBoxLayout,
             QWidget,
         )
-        from PySide6.QtCore import QTimer
 
         class _QueueView(QWidget):
             def __init__(self) -> None:
@@ -84,16 +84,19 @@ class QueueView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _start_queue(self) -> None:
-                from PySide6.QtWidgets import QMessageBox
-                from pathlib import Path
                 import json
+                from pathlib import Path
+
+                from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 from portable_crypt_recovery.models.queue_state import QueueState
                 from portable_crypt_recovery.services.hashcat.command_builder import (
-                    build_command_with_devices, CommandBuilderError,
+                    CommandBuilderError,
+                    build_command_with_devices,
                 )
                 from portable_crypt_recovery.services.queue.queue_runner import QueueRunner
-                from portable_crypt_recovery.core.atomic_write import atomic_write_json
 
                 state = get_app_state()
                 if not state.is_workspace_open():
@@ -225,9 +228,10 @@ class QueueView:  # pragma: no cover
 
             def _set_selected_status(self, new_status: str) -> None:
                 import json
+
                 from portable_crypt_recovery.app.app_state import get_app_state
-                from portable_crypt_recovery.models.queue_state import QueueState
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
+                from portable_crypt_recovery.models.queue_state import QueueState
 
                 item = self.job_list.currentItem()
                 if item is None:
@@ -259,6 +263,7 @@ class QueueView:  # pragma: no cover
 
             def _poll_status(self) -> None:
                 import json
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.models.queue_state import QueueState
 
@@ -293,7 +298,9 @@ class QueueView:  # pragma: no cover
 
             def _refresh_list(self) -> None:
                 import json
+
                 from PySide6.QtWidgets import QListWidgetItem
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.models.queue_state import QueueState
 

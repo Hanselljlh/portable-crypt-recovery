@@ -53,6 +53,7 @@ class JobsView:  # pragma: no cover
 
             def _new_draft(self) -> None:
                 from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.app.app_state import get_app_state
 
                 state = get_app_state()
@@ -80,6 +81,7 @@ class JobsView:  # pragma: no cover
 
             def _save_draft(self, draft: dict, state) -> None:
                 import json
+
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
 
                 drafts_file = state.workspace_root / "jobs" / "drafts.json"
@@ -97,6 +99,7 @@ class JobsView:  # pragma: no cover
 
             def _expand_to_queue(self) -> None:
                 from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.app.app_state import get_app_state
 
                 item = self.job_list.currentItem()
@@ -126,19 +129,25 @@ class JobsView:  # pragma: no cover
             def _do_expand(self, draft: dict, state) -> int:
                 import json
                 from pathlib import Path
+
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 from portable_crypt_recovery.models.queue_state import QueueState
-                from portable_crypt_recovery.services.builders.hash_mode_builder import build_mode_set
-                from portable_crypt_recovery.services.builders.pim_builder import (
-                    build_pim_set, build_default_pim_set,
+                from portable_crypt_recovery.services.builders.final_job_expander import expand_jobs
+                from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                    build_mode_set,
                 )
                 from portable_crypt_recovery.services.builders.keyfile_builder import (
-                    import_keyfile, build_keyfile_combinations,
+                    build_keyfile_combinations,
+                    import_keyfile,
                 )
                 from portable_crypt_recovery.services.builders.password_builder import (
-                    build_manual_password_source, build_wordlist_source,
+                    build_manual_password_source,
+                    build_wordlist_source,
                 )
-                from portable_crypt_recovery.services.builders.final_job_expander import expand_jobs
+                from portable_crypt_recovery.services.builders.pim_builder import (
+                    build_default_pim_set,
+                    build_pim_set,
+                )
 
                 ws = state.workspace_root
 
@@ -216,8 +225,10 @@ class JobsView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _delete_draft(self) -> None:
-                from PySide6.QtWidgets import QMessageBox
                 import json
+
+                from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
 
@@ -258,7 +269,9 @@ class JobsView:  # pragma: no cover
 
             def _refresh_list(self) -> None:
                 import json
+
                 from PySide6.QtWidgets import QListWidgetItem
+
                 from portable_crypt_recovery.app.app_state import get_app_state
 
                 self.job_list.clear()
@@ -296,7 +309,7 @@ class JobsView:  # pragma: no cover
 class _NewJobDraftDialog:  # pragma: no cover
     def __new__(cls, parent=None, workspace_root=None):
         from PySide6.QtWidgets import (
-            QButtonGroup,
+            QComboBox,
             QDialog,
             QDialogButtonBox,
             QFileDialog,
@@ -309,7 +322,6 @@ class _NewJobDraftDialog:  # pragma: no cover
             QPushButton,
             QRadioButton,
             QVBoxLayout,
-            QComboBox,
         )
 
         class _Dlg(QDialog):
@@ -445,7 +457,8 @@ class _NewJobDraftDialog:  # pragma: no cover
                     return
                 target_id = tgt.get("target_id", "")
                 from portable_crypt_recovery.services.headers.metadata import (
-                    list_header_ids, load_header_metadata,
+                    list_header_ids,
+                    load_header_metadata,
                 )
                 for hid in list_header_ids(self._workspace_root):
                     try:
@@ -463,7 +476,6 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self.txt_wordlist.setEnabled(checked)
 
             def _browse_wordlist(self) -> None:
-                from PySide6.QtWidgets import QFileDialog
                 path, _ = QFileDialog.getOpenFileName(
                     self, "Select Wordlist File", "", "Text Files (*.txt);;All Files (*.*)"
                 )
@@ -471,7 +483,7 @@ class _NewJobDraftDialog:  # pragma: no cover
                     self.txt_wordlist.setText(path)
 
             def _add_keyfile(self) -> None:
-                from PySide6.QtWidgets import QFileDialog, QListWidgetItem
+                from PySide6.QtWidgets import QListWidgetItem
                 path, _ = QFileDialog.getOpenFileName(
                     self, "Select Keyfile", "", "All Files (*.*)"
                 )
@@ -487,6 +499,7 @@ class _NewJobDraftDialog:  # pragma: no cover
 
             def _on_accept(self) -> None:
                 from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.core.ids import new_id
                 from portable_crypt_recovery.core.timestamps import utc_now_iso
 

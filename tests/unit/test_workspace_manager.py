@@ -1,4 +1,7 @@
-from portable_crypt_recovery.workspace.workspace_manager import create_or_open_workspace, open_workspace
+from portable_crypt_recovery.workspace.workspace_manager import (
+    create_or_open_workspace,
+    open_workspace,
+)
 
 
 def test_create_or_open_workspace(tmp_path):

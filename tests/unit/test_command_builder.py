@@ -1,19 +1,19 @@
 """Tests for the Hashcat command builder."""
 
-import json
 import os
-import pytest
 from pathlib import Path
 
-from portable_crypt_recovery.services.headers.metadata import save_header_metadata
-from portable_crypt_recovery.models.header import Header
-from portable_crypt_recovery.models.job import QueuedJob
+import pytest
+
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.timestamps import utc_now_iso
+from portable_crypt_recovery.models.header import Header
+from portable_crypt_recovery.models.job import QueuedJob
 from portable_crypt_recovery.services.hashcat.command_builder import (
     CommandBuilderError,
     build_command,
 )
+from portable_crypt_recovery.services.headers.metadata import save_header_metadata
 
 
 def _make_workspace(tmp_path: Path) -> Path:

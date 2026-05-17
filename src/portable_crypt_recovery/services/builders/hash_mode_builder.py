@@ -8,8 +8,6 @@ TrueCrypt legacy modes: 6211-6243
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.models.hash_mode_set import HashModeEntry, HashModeSet
 

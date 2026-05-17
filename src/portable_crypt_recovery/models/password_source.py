@@ -29,7 +29,7 @@ class PasswordSource:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PasswordSource":
+    def from_dict(cls, data: dict[str, Any]) -> PasswordSource:
         return cls(
             source_id=data["source_id"],
             source_type=data.get("source_type", "wordlist"),

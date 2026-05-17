@@ -2,16 +2,14 @@
 
 import pytest
 
+from portable_crypt_recovery.models.keyfile_set import KeyfileEntry
 from portable_crypt_recovery.services.builders.keyfile_builder import (
     KEYFILE_USED_BYTES_LIMIT,
-    KeyfileLimitBlocked,
-    KeyfileLimitConfirmRequired,
     KeyfileLimitWarning,
     build_keyfile_combinations,
     import_keyfile,
     normalize_keyfile,
 )
-from portable_crypt_recovery.models.keyfile_set import KeyfileEntry
 
 
 def test_normalize_small_keyfile(tmp_path):

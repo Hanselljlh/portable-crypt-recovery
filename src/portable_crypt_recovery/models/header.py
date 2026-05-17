@@ -19,7 +19,9 @@ class Header:
     size_bytes: int
     sha256: str
     extraction_timestamp: str
-    candidate_type: str = "unknown"  # "normal_volume_header" | "hidden_volume_header" | "normal_system_header" | "hidden_system_candidate" | "unknown_imported_header"
+    # "normal_volume_header" | "hidden_volume_header" | "normal_system_header"
+    # | "hidden_system_candidate" | "unknown_imported_header"
+    candidate_type: str = "unknown"
     notes: str = ""
 
     def validate_size(self) -> None:
@@ -44,7 +46,7 @@ class Header:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Header":
+    def from_dict(cls, data: dict[str, Any]) -> Header:
         return cls(
             header_id=data["header_id"],
             target_id=data["target_id"],

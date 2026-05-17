@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from portable_crypt_recovery.core.ids import new_id
-from portable_crypt_recovery.core.paths import to_workspace_relative
 from portable_crypt_recovery.core.timestamps import utc_now_iso
 from portable_crypt_recovery.models.hash_mode_set import HashModeSet
 from portable_crypt_recovery.models.job import QueuedJob
@@ -55,11 +54,9 @@ def expand_jobs(
         pim_iterations = [("custom", v) for v in pim_set.values]
 
     # Resolve keyfile set iterations
-    kf_iterations: list[KeyfileSet | None]
-    if not keyfile_sets:
-        kf_iterations = [None]
-    else:
-        kf_iterations = list(keyfile_sets)  # type: ignore[assignment]
+    kf_iterations: list[KeyfileSet | None] = (
+        [None] if not keyfile_sets else list(keyfile_sets)  # type: ignore[assignment]
+    )
 
     for mode_entry in mode_set.entries:
         for pim_mode, pim_value in pim_iterations:

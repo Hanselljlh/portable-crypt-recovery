@@ -24,16 +24,14 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
     """
 
     def __new__(cls):
-        from PySide6.QtCore import Qt
+        from PySide6.QtCore import QUrl
         from PySide6.QtGui import QAction, QDesktopServices
-        from PySide6.QtCore import QUrl, QTimer
         from PySide6.QtWidgets import (
             QHBoxLayout,
             QListWidget,
             QListWidgetItem,
             QMainWindow,
             QStackedWidget,
-            QVBoxLayout,
             QWidget,
         )
 
@@ -71,7 +69,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                     CleanupView(),
                 ]
 
-                for name, view in zip(SCREEN_NAMES, views):
+                for name, view in zip(SCREEN_NAMES, views, strict=False):
                     self.nav.addItem(QListWidgetItem(name))
                     self.stack.addWidget(view)
 
@@ -125,6 +123,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 import os
                 import subprocess
                 import sys
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 state = get_app_state()
                 if state.workspace_root and state.workspace_root.exists():
@@ -137,6 +136,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 import os
                 import subprocess
                 import sys
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 state = get_app_state()
                 if state.workspace_root:
@@ -149,9 +149,11 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
 
             def _export_diagnostic(self) -> None:
                 import os
-                import sys
                 import subprocess
+                import sys
+
                 from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.app.app_state import get_app_state
                 state = get_app_state()
                 if not state.workspace_root:

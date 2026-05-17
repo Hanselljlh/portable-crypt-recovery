@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -35,7 +35,7 @@ class Target:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Target":
+    def from_dict(cls, data: dict[str, Any]) -> Target:
         return cls(
             target_id=data["target_id"],
             display_name=data["display_name"],

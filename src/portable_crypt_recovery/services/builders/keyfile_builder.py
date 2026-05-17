@@ -9,7 +9,6 @@ from pathlib import Path
 
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.paths import to_workspace_relative
-from portable_crypt_recovery.core.timestamps import utc_now_iso
 from portable_crypt_recovery.models.keyfile_set import KeyfileEntry, KeyfileSet
 
 KEYFILE_USED_BYTES_LIMIT = 1_048_576  # 1 MiB

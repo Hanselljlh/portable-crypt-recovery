@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 
 _timer: threading.Timer | None = None
@@ -32,15 +33,14 @@ def _schedule(interval: int) -> None:
 
 
 def _tick(interval: int) -> None:
-    try:
+    with contextlib.suppress(Exception):
         _save_settings()
-    except Exception:
-        pass
     _schedule(interval)
 
 
 def _save_settings() -> None:
     import json
+
     from portable_crypt_recovery.app.app_state import get_app_state
     from portable_crypt_recovery.core.atomic_write import atomic_write_json
 
@@ -51,10 +51,8 @@ def _save_settings() -> None:
     settings_file = state.workspace_root / "settings.json"
     data: dict = {}
     if settings_file.exists():
-        try:
+        with contextlib.suppress(Exception):
             data = json.loads(settings_file.read_text(encoding="utf-8"))
-        except Exception:
-            pass
 
     data["clipboard_auto_clear_seconds"] = state.clipboard_auto_clear_seconds
     data["default_queue_behavior_after_crack"] = state.queue_behavior_after_crack

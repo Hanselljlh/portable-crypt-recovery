@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 JOB_STATUSES = (
@@ -46,7 +46,7 @@ class JobDraft:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "JobDraft":
+    def from_dict(cls, data: dict[str, Any]) -> JobDraft:
         return cls(
             draft_id=data["draft_id"],
             target_id=data["target_id"],
@@ -111,7 +111,7 @@ class QueuedJob:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "QueuedJob":
+    def from_dict(cls, data: dict[str, Any]) -> QueuedJob:
         return cls(
             job_id=data["job_id"],
             target_id=data["target_id"],

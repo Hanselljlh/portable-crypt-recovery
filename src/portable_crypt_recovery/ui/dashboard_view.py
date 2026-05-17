@@ -7,17 +7,16 @@ class DashboardView:  # pragma: no cover
     """Dashboard showing workspace name, Hashcat status, counts, and recent activity."""
 
     def __new__(cls, app_state=None):
+        from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import (
             QGroupBox,
             QHBoxLayout,
             QLabel,
             QListWidget,
             QPushButton,
-            QSizePolicy,
             QVBoxLayout,
             QWidget,
         )
-        from PySide6.QtCore import QTimer
 
         class _DashboardView(QWidget):
             def __init__(self, app_state=None) -> None:
@@ -103,7 +102,7 @@ class DashboardView:  # pragma: no cover
 
             def _load_recent_activity(self, workspace_root) -> None:
                 import json
-                from PySide6.QtWidgets import QListWidgetItem
+
                 from portable_crypt_recovery.models.queue_state import QueueState
 
                 self.activity_list.clear()

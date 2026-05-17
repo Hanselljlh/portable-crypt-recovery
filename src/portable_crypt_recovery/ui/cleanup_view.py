@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 
 # Categories the user can choose to delete.
 # Each entry: (label, workspace-relative glob patterns, safe_to_delete_note)
@@ -56,7 +57,7 @@ class CleanupView:  # pragma: no cover
         import shutil
         from pathlib import Path
 
-        from PySide6.QtCore import Qt, QThread, Signal, QObject
+        from PySide6.QtCore import QObject, QThread, Signal
         from PySide6.QtWidgets import (
             QAbstractItemView,
             QGroupBox,
@@ -87,10 +88,8 @@ class CleanupView:  # pragma: no cover
                         if d.exists():
                             for f in d.rglob("*"):
                                 if f.is_file():
-                                    try:
+                                    with contextlib.suppress(OSError):
                                         total += f.stat().st_size
-                                    except OSError:
-                                        pass
                     results.append((label, total))
                 self.finished.emit(results)
 
@@ -114,9 +113,10 @@ class CleanupView:  # pragma: no cover
 
                 self.table = QTableWidget(len(_CATEGORIES), 3)
                 self.table.setHorizontalHeaderLabels(["Category", "Size on Disk", "Notes"])
-                self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-                self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-                self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+                hdr = self.table.horizontalHeader()
+                hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+                hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+                hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
                 self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
                 self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
                 self.table.verticalHeader().setVisible(False)
@@ -214,8 +214,6 @@ class CleanupView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _clean_selected(self) -> None:
-                import shutil
-                from pathlib import Path
 
                 ws = self._workspace()
                 if ws is None:

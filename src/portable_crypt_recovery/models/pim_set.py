@@ -25,7 +25,7 @@ class PimSet:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PimSet":
+    def from_dict(cls, data: dict[str, Any]) -> PimSet:
         return cls(
             pim_set_id=data["pim_set_id"],
             pim_mode=data.get("pim_mode", "default"),

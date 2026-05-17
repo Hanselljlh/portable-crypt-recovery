@@ -7,8 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from portable_crypt_recovery.core.atomic_write import atomic_write_json, atomic_write_text
-from portable_crypt_recovery.core.timestamps import utc_now_iso
+from portable_crypt_recovery.core.atomic_write import atomic_write_json
 from portable_crypt_recovery.models.report import Report
 
 _CSV_PATH = "reports/csv/cracked-results-index.csv"

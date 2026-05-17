@@ -5,11 +5,9 @@ import json
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.timestamps import utc_now_iso
 from portable_crypt_recovery.models.header import Header
-from portable_crypt_recovery.models.job import QueuedJob
-from portable_crypt_recovery.models.pim_set import PimSet
 from portable_crypt_recovery.models.queue_state import QueueState
-from portable_crypt_recovery.services.builders.hash_mode_builder import build_mode_set
 from portable_crypt_recovery.services.builders.final_job_expander import expand_jobs
+from portable_crypt_recovery.services.builders.hash_mode_builder import build_mode_set
 from portable_crypt_recovery.services.builders.password_builder import build_manual_password_source
 from portable_crypt_recovery.services.builders.pim_builder import build_default_pim_set
 from portable_crypt_recovery.services.headers.metadata import (
@@ -89,7 +87,9 @@ def test_full_workspace_flow(tmp_path):
     assert entries[0]["category"] == "normalized_header"
 
     # 6. Build a hash mode set
-    mode_set = build_mode_set("veracrypt", "normal_volume_header", target_id=target_id, header_id=header_id)
+    mode_set = build_mode_set(
+        "veracrypt", "normal_volume_header", target_id=target_id, header_id=header_id
+    )
     assert len(mode_set.entries) > 0
 
     # 7. Build PIM and password source

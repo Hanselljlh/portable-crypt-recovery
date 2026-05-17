@@ -26,7 +26,7 @@ class KeyfileEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "KeyfileEntry":
+    def from_dict(cls, data: dict[str, Any]) -> KeyfileEntry:
         return cls(
             keyfile_id=data["keyfile_id"],
             original_path=data.get("original_path", ""),
@@ -53,7 +53,7 @@ class KeyfileSet:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "KeyfileSet":
+    def from_dict(cls, data: dict[str, Any]) -> KeyfileSet:
         entries = [KeyfileEntry.from_dict(e) for e in data.get("entries", [])]
         return cls(
             set_id=data["set_id"],

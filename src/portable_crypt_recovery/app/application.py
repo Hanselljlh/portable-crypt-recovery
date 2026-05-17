@@ -11,8 +11,8 @@ def run_app(argv: list[str]) -> int:
 
     PySide6 is imported lazily so backend tests can run without creating a GUI.
     """
-    from portable_crypt_recovery.app.startup import try_auto_open_workspace
     from portable_crypt_recovery.app.autosave import start as start_autosave
+    from portable_crypt_recovery.app.startup import try_auto_open_workspace
 
     app_root = ensure_default_portable_layout()
     opened = try_auto_open_workspace(app_root)
@@ -36,6 +36,7 @@ def run_app(argv: list[str]) -> int:
     # Check for a stale runner lock from a previous crash
     if opened:
         from PySide6.QtCore import QTimer
+
         from portable_crypt_recovery.app.app_state import get_app_state
         ws_root = get_app_state().workspace_root
         if ws_root is not None:

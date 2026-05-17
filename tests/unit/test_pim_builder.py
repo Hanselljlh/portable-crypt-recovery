@@ -3,7 +3,6 @@
 import pytest
 
 from portable_crypt_recovery.services.builders.pim_builder import (
-    PimLimitBlocked,
     PimLimitConfirmRequired,
     PimLimitWarning,
     build_default_pim_set,

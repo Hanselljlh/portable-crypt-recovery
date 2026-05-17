@@ -10,7 +10,9 @@ _clear_timer: threading.Timer | None = None
 _timer_lock = threading.Lock()
 
 
-def copy_with_auto_clear(text: str, clear_after_seconds: int = DEFAULT_CLIPBOARD_CLEAR_SECONDS) -> None:
+def copy_with_auto_clear(
+    text: str, clear_after_seconds: int = DEFAULT_CLIPBOARD_CLEAR_SECONDS
+) -> None:
     """Copy text to the system clipboard and clear it after ``clear_after_seconds``.
 
     Requires a running Qt application (uses QApplication.clipboard()).

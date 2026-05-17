@@ -7,7 +7,7 @@ class SettingsView:  # pragma: no cover
     """Settings: Hashcat path, device scan, workspace, clipboard/queue preferences."""
 
     def __new__(cls):
-        from PySide6.QtCore import QThread, Signal, QObject
+        from PySide6.QtCore import QObject, QThread, Signal
         from PySide6.QtWidgets import (
             QCheckBox,
             QComboBox,
@@ -19,8 +19,6 @@ class SettingsView:  # pragma: no cover
             QInputDialog,
             QLabel,
             QLineEdit,
-            QListWidget,
-            QListWidgetItem,
             QPushButton,
             QSpinBox,
             QVBoxLayout,
@@ -37,6 +35,7 @@ class SettingsView:  # pragma: no cover
 
             def run(self):
                 from pathlib import Path
+
                 from portable_crypt_recovery.services.hashcat.verifier import verify_hashcat
                 self.finished.emit(verify_hashcat(Path(self._path)))
 
@@ -50,6 +49,7 @@ class SettingsView:  # pragma: no cover
 
             def run(self):
                 from pathlib import Path
+
                 from portable_crypt_recovery.services.hashcat.device_scan import scan_devices
                 self.finished.emit(scan_devices(Path(self._path)))
 
@@ -202,7 +202,7 @@ class SettingsView:  # pragma: no cover
                 if hc.executable_path:
                     self.txt_hc_path.setText(str(hc.executable_path))
                 if hc.verified and hc.version_string:
-                    self.lbl_hc_status.setText(f"Status: ✓ Verified")
+                    self.lbl_hc_status.setText("Status: ✓ Verified")
                     self.lbl_hc_status.setStyleSheet("font-weight: bold; color: green;")
                     self.lbl_hc_version.setText(f"Version: {hc.version_string}")
                 else:
@@ -250,8 +250,8 @@ class SettingsView:  # pragma: no cover
                     self.txt_hc_path.setText(path)
 
             def _use_portable_tools(self):
-                from portable_crypt_recovery.services.hashcat.locator import find_in_portable_tools
                 from portable_crypt_recovery.core.paths import app_root_from_cwd
+                from portable_crypt_recovery.services.hashcat.locator import find_in_portable_tools
                 found = find_in_portable_tools(app_root_from_cwd())
                 if found:
                     self.txt_hc_path.setText(str(found))
@@ -295,12 +295,13 @@ class SettingsView:  # pragma: no cover
                     )
                 else:
                     hc.verified = False
-                    self.lbl_hc_status.setText(f"Status: ✗ Verification failed")
+                    self.lbl_hc_status.setText("Status: ✗ Verification failed")
                     self.lbl_hc_status.setStyleSheet("font-weight: bold; color: red;")
                     from PySide6.QtWidgets import QMessageBox
                     QMessageBox.critical(
                         self, "Verification Failed",
-                        f"{result.error}\n\nCheck that the selected file is the real Hashcat executable.",
+                        f"{result.error}\n\n"
+                        "Check that the selected file is the real Hashcat executable.",
                     )
 
             def _scan_devices(self):
@@ -343,10 +344,13 @@ class SettingsView:  # pragma: no cover
                 folder = QFileDialog.getExistingDirectory(self, "Choose Location for New Workspace")
                 if not folder:
                     return
-                name, ok = QInputDialog.getText(self, "Workspace Name", "Enter a name for the workspace:")
+                name, ok = QInputDialog.getText(
+                    self, "Workspace Name", "Enter a name for the workspace:"
+                )
                 if not ok or not name.strip():
                     return
                 from pathlib import Path
+
                 from portable_crypt_recovery.workspace.workspace_manager import create_workspace
                 ws_root = Path(folder) / name.strip()
                 ws = create_workspace(ws_root, name.strip())
@@ -357,7 +361,9 @@ class SettingsView:  # pragma: no cover
                 if not folder:
                     return
                 from pathlib import Path
+
                 from PySide6.QtWidgets import QMessageBox
+
                 from portable_crypt_recovery.workspace.workspace_manager import open_workspace
                 try:
                     ws = open_workspace(Path(folder))
@@ -382,7 +388,9 @@ class SettingsView:  # pragma: no cover
                             state.hashcat_setup.executable_path = hc_path
                             state.hashcat_setup.verified = settings.get("hashcat_verified", False)
                             state.hashcat_setup.version_string = settings.get("hashcat_version", "")
-                            state.hashcat_setup.selected_device_ids = settings.get("selected_compute_devices", [])
+                            state.hashcat_setup.selected_device_ids = settings.get(
+                                "selected_compute_devices", []
+                            )
                     except Exception:
                         pass
 
@@ -432,10 +440,15 @@ class SettingsView:  # pragma: no cover
                     from portable_crypt_recovery.core.atomic_write import atomic_write_json
                     atomic_write_json(settings_path, data)
                     from PySide6.QtWidgets import QMessageBox
-                    QMessageBox.information(self, "Saved", "Preferences saved to workspace settings.")
+                    QMessageBox.information(
+                        self, "Saved", "Preferences saved to workspace settings."
+                    )
                 else:
                     from PySide6.QtWidgets import QMessageBox
-                    QMessageBox.information(self, "Saved", "Preferences saved for this session.\nOpen a workspace to persist them.")
+                    QMessageBox.information(
+                        self, "Saved",
+                        "Preferences saved for this session.\nOpen a workspace to persist them."
+                    )
 
             # ── threading helper ──────────────────────────────────────────
 

@@ -29,7 +29,7 @@ class QueueState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "QueueState":
+    def from_dict(cls, data: dict[str, Any]) -> QueueState:
         jobs = {
             jid: QueuedJob.from_dict(jdata)
             for jid, jdata in data.get("jobs", {}).items()

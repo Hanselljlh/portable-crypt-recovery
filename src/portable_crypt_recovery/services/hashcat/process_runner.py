@@ -11,9 +11,9 @@ import os
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 
 @dataclass
@@ -177,7 +177,9 @@ def _windows_suspend(pid: int) -> None:
         if kernel32.Thread32First(snapshot, ctypes.byref(te)):
             while True:
                 if te.th32OwnerProcessID == pid:
-                    thread_handle = kernel32.OpenThread(THREAD_SUSPEND_RESUME, False, te.th32ThreadID)
+                    thread_handle = kernel32.OpenThread(  # noqa: E501
+                        THREAD_SUSPEND_RESUME, False, te.th32ThreadID
+                    )
                     if thread_handle:
                         kernel32.SuspendThread(thread_handle)
                         kernel32.CloseHandle(thread_handle)
@@ -213,7 +215,9 @@ def _windows_resume(pid: int) -> None:
         if kernel32.Thread32First(snapshot, ctypes.byref(te)):
             while True:
                 if te.th32OwnerProcessID == pid:
-                    thread_handle = kernel32.OpenThread(THREAD_SUSPEND_RESUME, False, te.th32ThreadID)
+                    thread_handle = kernel32.OpenThread(  # noqa: E501
+                        THREAD_SUSPEND_RESUME, False, te.th32ThreadID
+                    )
                     if thread_handle:
                         kernel32.ResumeThread(thread_handle)
                         kernel32.CloseHandle(thread_handle)

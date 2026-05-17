@@ -5,6 +5,7 @@ All source access is read-only. The source file is never modified.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from pathlib import Path
 from typing import NamedTuple
@@ -111,21 +112,15 @@ def extract_candidates(
     candidates: list[ExtractionCandidate] = []
 
     if include_normal:
-        try:
+        with contextlib.suppress(ValueError):
             candidates.append(extract_normal_volume_header(source))
-        except ValueError:
-            pass  # file too small for this candidate
 
     if include_hidden:
-        try:
+        with contextlib.suppress(ValueError):
             candidates.append(extract_hidden_volume_header(source))
-        except ValueError:
-            pass
 
     if include_system:
-        try:
+        with contextlib.suppress(ValueError):
             candidates.append(extract_normal_system_header(source))
-        except ValueError:
-            pass
 
     return candidates
