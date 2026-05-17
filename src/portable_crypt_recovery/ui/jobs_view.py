@@ -353,7 +353,7 @@ class JobsView:  # pragma: no cover
                             n = len([ln for ln in raw.splitlines() if ln.strip()])
                             pw_detail = f"manual: {n} password{'s' if n != 1 else ''}"
                         kf = d.get("keyfile_paths", [])
-                        kf_detail = f"  ·  {len(kf)} keyfile{'s' if len(kf) != 1 else ''}" if kf else ""
+                        kf_detail = f"  ·  {len(kf)} keyfile{'s' if len(kf) != 1 else ''}"
                         line2 = f"    {strategy}  ·  {pim}  ·  {pw_detail}{kf_detail}"
 
                         item = QListWidgetItem(f"{line1}\n{line2}")
