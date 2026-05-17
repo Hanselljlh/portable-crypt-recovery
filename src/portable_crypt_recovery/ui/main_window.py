@@ -73,7 +73,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                     self.nav.addItem(QListWidgetItem(name))
                     self.stack.addWidget(view)
 
-                self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+                self.nav.currentRowChanged.connect(self._on_nav_changed)
                 self.nav.setCurrentRow(0)
 
                 layout.addWidget(self.nav)
@@ -86,6 +86,13 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 # Navigate to Settings on first launch if no workspace loaded
                 from PySide6.QtCore import QTimer
                 QTimer.singleShot(150, self._check_first_run)
+
+            def _on_nav_changed(self, index: int) -> None:
+                """Switch stack page and refresh the view if it supports it."""
+                self.stack.setCurrentIndex(index)
+                view = self.stack.widget(index)
+                if hasattr(view, "_refresh_list"):
+                    view._refresh_list()
 
             def _check_first_run(self) -> None:
                 from PySide6.QtWidgets import QMessageBox  # noqa: PLC0415

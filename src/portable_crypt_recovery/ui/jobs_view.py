@@ -23,7 +23,7 @@ class JobsView:  # pragma: no cover
 
                 toolbar = QHBoxLayout()
                 self.btn_new = QPushButton("New Job Draft...")
-                self.btn_expand = QPushButton("Expand to Queue")
+                self.btn_expand = QPushButton("Send to Queue")
                 self.btn_delete = QPushButton("Delete Draft")
                 toolbar.addWidget(self.btn_new)
                 toolbar.addWidget(self.btn_expand)
@@ -130,11 +130,15 @@ class JobsView:  # pragma: no cover
 
                 progress.close()
                 state.job_count += count
+
+                # Mark the draft as sent so the list shows it was queued
+                self._mark_draft_sent(draft, count, state)
                 self._refresh_list()
                 QMessageBox.information(
                     self,
                     "Jobs Added to Queue",
-                    f"{count} job(s) added to the queue from this draft.",
+                    f"{count} job(s) sent to the queue.\n\n"
+                    "Switch to the Queue tab to see them.",
                 )
 
             def _do_expand(self, draft: dict, state) -> int:
@@ -231,6 +235,21 @@ class JobsView:  # pragma: no cover
                 atomic_write_json(queue_file, qs.to_dict())
                 return len(jobs)
 
+            def _mark_draft_sent(self, draft: dict, count: int, state) -> None:
+                import json
+
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
+                drafts_file = state.workspace_root / "jobs" / "drafts.json"
+                try:
+                    data = json.loads(drafts_file.read_text(encoding="utf-8"))
+                    for d in data.get("drafts", []):
+                        if d.get("draft_id") == draft.get("draft_id"):
+                            d["sent"] = True
+                            d["sent_job_count"] = count
+                    atomic_write_json(drafts_file, data)
+                except Exception:
+                    pass
+
             # ------------------------------------------------------------------
             # Delete draft
             # ------------------------------------------------------------------
@@ -280,7 +299,10 @@ class JobsView:  # pragma: no cover
 
             def _refresh_list(self) -> None:
                 import json
+                from pathlib import Path
 
+                from PySide6.QtCore import QSize
+                from PySide6.QtGui import QBrush, QColor
                 from PySide6.QtWidgets import QListWidgetItem
 
                 from portable_crypt_recovery.app.app_state import get_app_state
@@ -297,15 +319,48 @@ class JobsView:  # pragma: no cover
                 try:
                     data = json.loads(drafts_file.read_text(encoding="utf-8"))
                     for d in data.get("drafts", []):
-                        strategy = "current+legacy" if d.get("hash_mode_strategy") != "current_only" else "current"
-                        pim_label = "default PIM" if d.get("pim_mode") == "default" else f"PIM: {d.get('pim_raw_input', '')}"
-                        pw_label = d.get("password_source_type", "manual")
-                        label = (
-                            f"{d.get('label', d.get('draft_id', '?'))}  |  "
-                            f"{strategy}  |  {pim_label}  |  pw: {pw_label}"
+                        sent = d.get("sent", False)
+                        sent_count = d.get("sent_job_count", 0)
+
+                        # --- Line 1: sent badge + name + family ---
+                        badge = f"✓ {sent_count} jobs sent  " if sent else "○ not sent  "
+                        family = d.get("family", "unknown")
+                        name = d.get("label", d.get("draft_id", "?"))
+                        ctype = d.get("candidate_type", "normal_volume_header")
+                        ctype_short = (
+                            ctype.replace("_volume_header", "").replace("_", " ").strip()
+                            or ctype
                         )
-                        item = QListWidgetItem(label)
+                        line1 = f"{badge}{name}  [{family}]  ·  {ctype_short}"
+
+                        # --- Line 2: settings detail ---
+                        strategy = (
+                            "all modes"
+                            if d.get("hash_mode_strategy") != "current_only"
+                            else "current modes only"
+                        )
+                        pim = (
+                            "default PIM"
+                            if d.get("pim_mode") == "default"
+                            else f"PIM: {d.get('pim_raw_input', '')}"
+                        )
+                        pw_type = d.get("password_source_type", "manual")
+                        if pw_type == "wordlist":
+                            wl = d.get("password_wordlist_path", "")
+                            pw_detail = f"wordlist: {Path(wl).name}" if wl else "wordlist: (none)"
+                        else:
+                            raw = d.get("password_manual_text", "")
+                            n = len([ln for ln in raw.splitlines() if ln.strip()])
+                            pw_detail = f"manual: {n} password{'s' if n != 1 else ''}"
+                        kf = d.get("keyfile_paths", [])
+                        kf_detail = f"  ·  {len(kf)} keyfile{'s' if len(kf) != 1 else ''}" if kf else ""
+                        line2 = f"    {strategy}  ·  {pim}  ·  {pw_detail}{kf_detail}"
+
+                        item = QListWidgetItem(f"{line1}\n{line2}")
                         item.setData(256, d)
+                        item.setSizeHint(QSize(0, 48))
+                        if sent:
+                            item.setForeground(QBrush(QColor("#8888aa")))
                         self.job_list.addItem(item)
                 except Exception:
                     pass
