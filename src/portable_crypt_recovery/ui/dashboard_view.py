@@ -17,11 +17,11 @@ class DashboardView:  # pragma: no cover
             QVBoxLayout,
             QWidget,
         )
+        from PySide6.QtCore import QTimer
 
         class _DashboardView(QWidget):
             def __init__(self, app_state=None) -> None:
                 super().__init__()
-                self.app_state = app_state
                 layout = QVBoxLayout(self)
 
                 # Status row
@@ -56,8 +56,17 @@ class DashboardView:  # pragma: no cover
                 activity_layout.addWidget(self.activity_list)
                 layout.addWidget(activity_group, 1)
 
-                if app_state:
-                    self.refresh(app_state)
+                # Auto-refresh every 5 seconds so counts stay current
+                self._timer = QTimer(self)
+                self._timer.setInterval(5000)
+                self._timer.timeout.connect(self._auto_refresh)
+                self._timer.start()
+
+                self._auto_refresh()
+
+            def _auto_refresh(self) -> None:
+                from portable_crypt_recovery.app.app_state import get_app_state
+                self.refresh(get_app_state())
 
             def refresh(self, app_state) -> None:
                 if app_state.workspace_root:
@@ -79,5 +88,36 @@ class DashboardView:  # pragma: no cover
                 self.lbl_targets.setText(f"Targets: {app_state.target_count}")
                 self.lbl_headers.setText(f"Headers: {app_state.header_count}")
                 self.lbl_jobs.setText(f"Jobs: {app_state.job_count}")
+
+                # Populate recent activity from queue jobs
+                if app_state.workspace_root:
+                    self._load_recent_activity(app_state.workspace_root)
+
+            def _load_recent_activity(self, workspace_root) -> None:
+                import json
+                from PySide6.QtWidgets import QListWidgetItem
+                from portable_crypt_recovery.models.queue_state import QueueState
+
+                self.activity_list.clear()
+                queue_file = workspace_root / "queue" / "queue-state.json"
+                if not queue_file.exists():
+                    return
+                try:
+                    qs = QueueState.from_dict(
+                        json.loads(queue_file.read_text(encoding="utf-8"))
+                    )
+                except Exception:
+                    return
+
+                # Show last 20 jobs by order, newest first
+                recent = list(reversed(qs.queue_order[-20:]))
+                for job_id in recent:
+                    job = qs.jobs.get(job_id)
+                    if job is None:
+                        continue
+                    self.activity_list.addItem(
+                        f"[{job.status.upper():<14}]  mode={job.hashcat_mode}  "
+                        f"session={job.session_name}"
+                    )
 
         return _DashboardView(app_state)

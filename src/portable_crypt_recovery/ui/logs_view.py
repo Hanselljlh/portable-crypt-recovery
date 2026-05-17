@@ -45,11 +45,15 @@ class LogsView:  # pragma: no cover
                 self.refresh()
 
             def refresh(self) -> None:
-                if self.workspace_root is None:
+                from portable_crypt_recovery.app.app_state import get_app_state
+                ws = get_app_state().workspace_root
+                if ws is None:
+                    for w in (self.txt_app, self.txt_queue, self.txt_error):
+                        w.setPlainText("No workspace open.")
                     return
-                self._load_log(self.txt_app, self.workspace_root / "logs" / "app" / "app.log")
-                self._load_log(self.txt_queue, self.workspace_root / "logs" / "queue" / "queue.log")
-                self._load_log(self.txt_error, self.workspace_root / "logs" / "errors" / "error.log")
+                self._load_log(self.txt_app, ws / "logs" / "app" / "app.log")
+                self._load_log(self.txt_queue, ws / "logs" / "queue" / "queue.log")
+                self._load_log(self.txt_error, ws / "logs" / "errors" / "error.log")
 
             @staticmethod
             def _load_log(widget, path) -> None:
