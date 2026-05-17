@@ -301,18 +301,54 @@ class TargetsView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _remove_target(self) -> None:
+                import json
+
                 from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
                 item = self.target_list.currentItem()
                 if item is None:
                     QMessageBox.warning(self, "Remove Target", "No target selected.")
                     return
-                QMessageBox.information(
+
+                target = item.data(256)
+                if target is None:
+                    return
+
+                display = target.get("display_name", target.get("target_id", "?"))
+                reply = QMessageBox.question(
                     self,
                     "Remove Target",
-                    "Target removal is not yet implemented.\n"
-                    "To manually remove a target, delete its entry from targets/targets.json "
-                    "and the corresponding header files from "
-                    "headers/normalized/ and headers/metadata/.",
+                    f"Remove target '{display}'?\n\n"
+                    "The target record will be deleted. Extracted header files in\n"
+                    "headers/normalized/ and headers/metadata/ are NOT deleted\n"
+                    "(use Workspace Cleanup to remove them).",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
                 )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
+                state = get_app_state()
+                if not state.is_workspace_open():
+                    return
+
+                targets_file = state.workspace_root / "targets" / "targets.json"
+                try:
+                    data = json.loads(targets_file.read_text(encoding="utf-8"))
+                    tid = target.get("target_id", "")
+                    data["targets"] = [
+                        t for t in data.get("targets", [])
+                        if t.get("target_id") != tid
+                    ]
+                    atomic_write_json(targets_file, data)
+                    state.target_count = len(data["targets"])
+                except Exception as exc:
+                    QMessageBox.critical(self, "Remove Target", f"Failed to remove target:\n{exc}")
+                    return
+
+                self._refresh_targets()
 
         return _TargetsView()

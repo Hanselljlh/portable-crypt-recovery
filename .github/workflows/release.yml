@@ -6,34 +6,127 @@ on:
       - "v*"
 
 jobs:
+  # ── Windows portable build ─────────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}"
+          if ($v -match "^v") { $v = $v.Substring(1) }
+          echo "VERSION=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build portable release
+        shell: pwsh
+        run: |
+          .\packaging\windows\build.ps1 -Version "${{ steps.ver.outputs.VERSION }}" -PyExePath python
+
+      - name: Generate checksums
+        shell: pwsh
+        run: python scripts/make_checksums.py dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-${{ steps.ver.outputs.VERSION }}
+          path: |
+            dist/PCR-windows-portable-*.zip
+            dist/SHA256SUMS.txt
+
+  # ── Linux portable build ───────────────────────────────────────────────────
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-glx libegl1 libxkbcommon-x11-0 libdbus-1-3
+
+      - name: Resolve version
+        id: ver
+        run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
+          echo "VERSION=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Build portable release
+        run: |
+          chmod +x packaging/linux/build.sh
+          bash packaging/linux/build.sh "${{ steps.ver.outputs.VERSION }}"
+
+      - name: Generate checksums
+        run: python3 scripts/make_checksums.py dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-${{ steps.ver.outputs.VERSION }}
+          path: |
+            dist/PCR-linux-portable-*.tar.gz
+            dist/SHA256SUMS.txt
+
+  # ── GitHub Release ─────────────────────────────────────────────────────────
   release:
     runs-on: ubuntu-latest
-    needs: []
+    needs: [build-windows, build-linux]
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: PCR-windows
-          path: release/windows/
-        continue-on-error: true
+      - name: Resolve version
+        id: ver
+        run: |
+          V="${{ github.ref_name }}"
+          V="${V#v}"
+          echo "VERSION=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Download Linux artifact
+      - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: PCR-linux
-          path: release/linux/
-        continue-on-error: true
+          name: windows-release-${{ steps.ver.outputs.VERSION }}
+          path: release/
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release-${{ steps.ver.outputs.VERSION }}
+          path: release/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: "v${{ steps.ver.outputs.VERSION }}"
           body: |
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for release notes.
-          files: |
-            release/**/*
+            ## Portable Crypt Recovery v${{ steps.ver.outputs.VERSION }}
+
+            See [docs/user-guide/getting-started.md](https://github.com/${{ github.repository }}/blob/main/docs/user-guide/getting-started.md) for setup instructions.
+
+            ### Quick start
+            1. Extract the zip (Windows) or tarball (Linux)
+            2. Place `hashcat.exe` / `hashcat` in `tools/hashcat/`
+            3. Run `PCR.exe` / `./PCR`
+            4. Settings → Hashcat Setup → Verify
+            5. Add a target, extract headers, create a job, run the queue
+
+            > Hashcat is **not** bundled. Download from https://hashcat.net/hashcat/ and verify checksums.
+            > See [docs/safety-notes.txt](https://github.com/${{ github.repository }}/blob/main/docs/safety-notes.txt) — authorized use only.
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
