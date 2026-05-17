@@ -134,6 +134,7 @@ class QueueRunner:
             return
 
         log_path = self._workspace_root / job.log_path
+        log_path.parent.mkdir(parents=True, exist_ok=True)
 
         # cwd MUST be the directory containing hashcat.exe so that hashcat can
         # resolve ./OpenCL/, ./modules/, and other relative data paths it ships
@@ -152,6 +153,25 @@ class QueueRunner:
             "TMP": str(tmp_dir),
             "TMPDIR": str(tmp_dir),
         }
+
+        # Write a wrapper header to the log so the file always exists and is
+        # readable even if hashcat exits before producing any stdout.
+        start_ts = utc_now_iso()
+        try:
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(
+                    f"=== PCR JOB START ===\n"
+                    f"job_id      : {job.job_id}\n"
+                    f"mode        : {job.hashcat_mode}\n"
+                    f"session     : {job.session_name}\n"
+                    f"started     : {start_ts}\n"
+                    f"command     : {' '.join(args)}\n"
+                    f"outfile     : {self._workspace_root / job.outfile_path}\n"
+                    f"potfile     : {self._workspace_root / job.potfile_path}\n"
+                    f"=== HASHCAT OUTPUT BELOW ===\n"
+                )
+        except OSError:
+            pass
 
         with self._lock:
             self._current_runner = HashcatProcessRunner(
@@ -176,6 +196,24 @@ class QueueRunner:
             job.status = "failed"
         else:
             job.status = classification.status
+            if classification.cracked_password:
+                job.cracked_password = classification.cracked_password
+
+        # Write footer so the log shows final outcome
+        end_ts = utc_now_iso()
+        try:
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(
+                    f"\n=== PCR JOB END ===\n"
+                    f"finished    : {end_ts}\n"
+                    f"exit_code   : {exit_code}\n"
+                    f"result      : {job.status}\n"
+                )
+                if job.cracked_password:
+                    fh.write(f"PASSWORD    : {job.cracked_password}\n")
+                fh.write("===================\n")
+        except OSError:
+            pass
 
         job.updated_timestamp = utc_now_iso()
         self._queue_state.current_running_job = None

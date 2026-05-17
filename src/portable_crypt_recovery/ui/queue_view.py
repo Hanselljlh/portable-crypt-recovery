@@ -443,6 +443,31 @@ class QueueView:  # pragma: no cover
 
                 lines: list[str] = []
 
+                # ---- CRACKED BANNER (top, hard to miss) ----
+                if job.status == "cracked":
+                    pw = job.cracked_password
+                    if not pw:
+                        # Fall back to reading the outfile directly
+                        try:
+                            outfile_abs = state.workspace_root / job.outfile_path
+                            if outfile_abs.exists():
+                                raw = outfile_abs.read_text(
+                                    encoding="utf-8", errors="replace"
+                                ).strip()
+                                if raw and ":" in raw:
+                                    pw = raw.split(":", 1)[-1]
+                                elif raw:
+                                    pw = raw
+                        except OSError:
+                            pass
+                    lines.append("=" * 60)
+                    lines.append("  *** CRACKED ***")
+                    lines.append(f"  PASSWORD : {pw if pw else '(see outfile below)'}")
+                    outfile_rel = job.outfile_path
+                    lines.append(f"  OUTFILE  : {outfile_rel}")
+                    lines.append("=" * 60)
+                    lines.append("")
+
                 # Command array
                 if job.command_array:
                     lines.append("=== COMMAND ===")
@@ -450,30 +475,39 @@ class QueueView:  # pragma: no cover
                     lines.append("")
                 else:
                     lines.append("=== COMMAND ===")
-                    lines.append("(not yet built — expand to queue and start to generate)")
+                    lines.append("(not yet built — send to queue and start to generate)")
                     lines.append("")
 
                 # Log file
                 log_abs = state.workspace_root / job.log_path
+                status_label = job.status.upper()
                 self.lbl_log_header.setText(
-                    f"Job {job_id[:8]}  |  mode {job.hashcat_mode}  |  status: {job.status}"
-                    f"  |  log: {job.log_path}"
+                    f"Job {job_id[:8]}  |  mode {job.hashcat_mode}"
+                    f"  |  [{status_label}]  |  log: {job.log_path}"
                 )
                 if log_abs.exists():
                     try:
-                        log_lines = log_abs.read_text(encoding="utf-8", errors="replace").splitlines()
-                        lines.append("=== LOG (last 80 lines) ===")
-                        lines += log_lines[-80:]
+                        log_lines = log_abs.read_text(
+                            encoding="utf-8", errors="replace"
+                        ).splitlines()
+                        lines.append(f"=== LOG ({len(log_lines)} lines) ===")
+                        lines += log_lines
                     except OSError as exc:
                         lines.append(f"(could not read log: {exc})")
                 else:
                     lines.append("=== LOG ===")
-                    lines.append("(no log file yet — job has not run)")
+                    lines.append(
+                        f"(no log file at {log_abs})"
+                    )
 
                 self.txt_log.setPlainText("\n".join(lines))
-                # scroll to bottom so the most recent lines are visible
+                # For cracked jobs scroll to top so the banner is visible;
+                # for running jobs scroll to bottom to show live output.
                 sb = self.txt_log.verticalScrollBar()
-                sb.setValue(sb.maximum())
+                if job.status == "cracked":
+                    sb.setValue(0)
+                else:
+                    sb.setValue(sb.maximum())
 
             # ------------------------------------------------------------------
             # Polling / Refresh

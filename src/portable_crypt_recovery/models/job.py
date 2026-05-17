@@ -87,6 +87,8 @@ class QueuedJob:
     # Draft provenance — which draft this job was expanded from
     draft_id: str = ""
     draft_label: str = ""
+    # Crack result — populated by queue runner after classification
+    cracked_password: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -113,6 +115,7 @@ class QueuedJob:
             "notes": self.notes,
             "draft_id": self.draft_id,
             "draft_label": self.draft_label,
+            "cracked_password": self.cracked_password,
         }
 
     @classmethod
@@ -140,4 +143,5 @@ class QueuedJob:
             notes=data.get("notes", ""),
             draft_id=data.get("draft_id", ""),
             draft_label=data.get("draft_label", ""),
+            cracked_password=data.get("cracked_password", ""),
         )
