@@ -53,6 +53,141 @@ class SettingsView:  # pragma: no cover
                 from portable_crypt_recovery.services.hashcat.device_scan import scan_devices
                 self.finished.emit(scan_devices(Path(self._path)))
 
+        # ── background worker for backend info (driver check) ──────────────
+        class _BackendInfoWorker(QObject):
+            finished = Signal(str)   # raw backend-info stdout
+
+            def __init__(self, path):
+                super().__init__()
+                self._path = path
+
+            def run(self):
+                import subprocess
+                try:
+                    r = subprocess.run(
+                        [self._path, "--backend-info"],
+                        capture_output=True, text=True, timeout=30
+                    )
+                    self.finished.emit(r.stdout + r.stderr)
+                except Exception as exc:
+                    self.finished.emit(f"(error running hashcat --backend-info: {exc})")
+
+        # ── driver check dialog ────────────────────────────────────────────
+        _DRIVER_ROWS = [
+            {
+                "hardware": "NVIDIA GPU",
+                "backend": "CUDA",
+                "detect_keywords": ["cuda"],
+                "miss_keywords": ["cuda.version.: n/a", "no cuda", "cuda not available"],
+                "description": "GeForce, RTX, Quadro — fastest option by far",
+                "url": "https://www.nvidia.com/en-us/drivers/",
+                "url_label": "nvidia.com/drivers",
+            },
+            {
+                "hardware": "AMD GPU",
+                "backend": "HIP / OpenCL",
+                "detect_keywords": ["hip", "amd", "radeon"],
+                "miss_keywords": [],
+                "description": "Radeon RX series — very fast; needs Adrenalin drivers",
+                "url": "https://www.amd.com/en/support/download/drivers.html",
+                "url_label": "amd.com/support",
+            },
+            {
+                "hardware": "Intel GPU",
+                "backend": "OpenCL",
+                "detect_keywords": ["intel", "arc", "xe"],
+                "miss_keywords": [],
+                "description": "Arc / Xe / UHD — needs Intel GPU driver or oneAPI",
+                "url": "https://www.intel.com/content/www/us/en/download-center/home.html",
+                "url_label": "intel.com/download-center",
+            },
+            {
+                "hardware": "CPU (OpenCL)",
+                "backend": "OpenCL",
+                "detect_keywords": ["cpu"],
+                "miss_keywords": [],
+                "description": "Fallback if no GPU — slow for VeraCrypt; needs OpenCL CPU runtime",
+                "url": "https://github.com/intel/compute-runtime/releases",
+                "url_label": "intel compute-runtime (GitHub)",
+            },
+        ]
+
+        class _DriverCheckDialog(QDialog):
+            def __init__(self, backend_text: str, parent=None):
+                super().__init__(parent)
+                from PySide6.QtGui import QDesktopServices
+                from PySide6.QtWidgets import QPlainTextEdit
+                self.setWindowTitle("Driver / Runtime Check")
+                self.resize(700, 600)
+                lay = QVBoxLayout(self)
+
+                # --- Status grid ---
+                lay.addWidget(QLabel(
+                    "<b>Detected Compute Backends</b> — green = found in hashcat output, "
+                    "orange = not detected (may still work if driver is installed)"
+                ))
+                lower = backend_text.lower()
+
+                grid_widget = QWidget()
+                grid_lay = QVBoxLayout(grid_widget)
+                grid_lay.setSpacing(4)
+
+                for row in _DRIVER_ROWS:
+                    detected = any(kw in lower for kw in row["detect_keywords"])
+                    missed = any(kw in lower for kw in row["miss_keywords"])
+                    if detected and not missed:
+                        icon = "✅"
+                        color = "#2a5a2a"
+                        status = "Detected"
+                    else:
+                        icon = "⚠"
+                        color = "#5a4a00"
+                        status = "Not detected"
+
+                    row_w = QWidget()
+                    row_w.setStyleSheet(f"background: {color}; border-radius: 4px;")
+                    row_lay = QHBoxLayout(row_w)
+                    row_lay.setContentsMargins(8, 4, 8, 4)
+
+                    lbl_status = QLabel(f"{icon}  <b>{row['hardware']}</b>  ({row['backend']}) — {status}")
+                    lbl_status.setStyleSheet("color: #e0e0e0; background: transparent;")
+                    lbl_desc = QLabel(row["description"])
+                    lbl_desc.setStyleSheet("color: #aaaaaa; background: transparent; font-size: 11px;")
+                    btn_link = QPushButton(f"⬇ {row['url_label']}")
+                    btn_link.setFlat(True)
+                    btn_link.setStyleSheet(
+                        "color: #6ab0f5; text-decoration: underline; "
+                        "background: transparent; border: none;"
+                    )
+                    _url = row["url"]
+                    btn_link.clicked.connect(
+                        lambda checked=False, u=_url: QDesktopServices.openUrl(
+                            __import__("PySide6.QtCore", fromlist=["QUrl"]).QUrl(u)
+                        )
+                    )
+
+                    col_left = QVBoxLayout()
+                    col_left.addWidget(lbl_status)
+                    col_left.addWidget(lbl_desc)
+                    row_lay.addLayout(col_left, 1)
+                    row_lay.addWidget(btn_link)
+                    grid_lay.addWidget(row_w)
+
+                lay.addWidget(grid_widget)
+
+                # --- Raw backend info ---
+                lay.addWidget(QLabel("<b>Raw hashcat --backend-info output:</b>"))
+                txt = QPlainTextEdit()
+                txt.setReadOnly(True)
+                txt.setPlainText(backend_text if backend_text.strip()
+                                 else "(no output — is hashcat verified?)")
+                txt.setStyleSheet("font-family: Consolas, monospace; font-size: 11px;")
+                lay.addWidget(txt, 1)
+
+                close_btn = QPushButton("Close")
+                close_btn.clicked.connect(self.accept)
+                lay.addWidget(close_btn)
+
         # ── device selection dialog ────────────────────────────────────────
         class _DeviceDialog(QDialog):
             def __init__(self, devices, current_ids, parent=None):
@@ -117,10 +252,12 @@ class SettingsView:  # pragma: no cover
                 self.btn_portable_tools = QPushButton("Use Portable Tools Folder")
                 self.btn_verify_hc = QPushButton("Verify Hashcat")
                 self.btn_scan_devices = QPushButton("Scan Devices")
-                self.btn_download_page = QPushButton("Open Download Page")
+                self.btn_driver_check = QPushButton("Driver / Runtime Check…")
+                self.btn_download_page = QPushButton("Open Hashcat Download Page")
                 btn_row.addWidget(self.btn_portable_tools)
                 btn_row.addWidget(self.btn_verify_hc)
                 btn_row.addWidget(self.btn_scan_devices)
+                btn_row.addWidget(self.btn_driver_check)
                 btn_row.addWidget(self.btn_download_page)
                 btn_row.addStretch()
                 hc_layout.addLayout(btn_row)
@@ -198,6 +335,7 @@ class SettingsView:  # pragma: no cover
                 self.btn_portable_tools.clicked.connect(self._use_portable_tools)
                 self.btn_verify_hc.clicked.connect(self._verify_hashcat)
                 self.btn_scan_devices.clicked.connect(self._scan_devices)
+                self.btn_driver_check.clicked.connect(self._driver_check)
                 self.btn_download_page.clicked.connect(self._open_download_page)
                 self.btn_save_hc_perf.clicked.connect(self._save_hc_perf)
                 self.btn_create_ws.clicked.connect(self._create_workspace)
@@ -347,6 +485,23 @@ class SettingsView:  # pragma: no cover
                         f"{result.error}\n\n"
                         "Check that the selected file is the real Hashcat executable.",
                     )
+
+            def _driver_check(self):
+                path = self.txt_hc_path.text().strip()
+                if not path:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(
+                        self, "No Path",
+                        "Verify Hashcat first so the executable path is known."
+                    )
+                    return
+                self._set_busy(True, "Running hashcat --backend-info…")
+                self._run_in_thread(_BackendInfoWorker(path), self._on_driver_check_done)
+
+            def _on_driver_check_done(self, backend_text: str):
+                self._set_busy(False)
+                dlg = _DriverCheckDialog(backend_text, self)
+                dlg.exec()
 
             def _scan_devices(self):
                 path = self.txt_hc_path.text().strip()
@@ -513,6 +668,7 @@ class SettingsView:  # pragma: no cover
             def _set_busy(self, busy: bool, label: str = ""):
                 self.btn_verify_hc.setEnabled(not busy)
                 self.btn_scan_devices.setEnabled(not busy)
+                self.btn_driver_check.setEnabled(not busy)
                 self.btn_browse_hc.setEnabled(not busy)
                 if busy and label:
                     self.lbl_hc_status.setText(f"Status: {label}")
