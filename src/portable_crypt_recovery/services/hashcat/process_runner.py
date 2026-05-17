@@ -41,12 +41,16 @@ class HashcatProcessRunner:
         args: list[str],
         log_path: Path | None = None,
         on_line: Callable[[str], None] | None = None,
+        cwd: Path | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> None:
         if not args:
             raise ValueError("args must not be empty")
         self._args = args
         self._log_path = log_path
         self._on_line = on_line
+        self._cwd = cwd
+        self._extra_env = extra_env
         self._process: subprocess.Popen | None = None  # type: ignore[type-arg]
         self._lock = threading.Lock()
         self._stdout_lines: list[str] = []
@@ -57,6 +61,12 @@ class HashcatProcessRunner:
             if self._process is not None:
                 raise RuntimeError("Process already started.")
 
+        # Build environment: inherit the full current env then apply overrides.
+        # We never pass a *replacement* env so hashcat can still find its DLLs.
+        merged_env = dict(os.environ)
+        if self._extra_env:
+            merged_env.update(self._extra_env)
+
         kwargs: dict = {
             "args": self._args,
             "stdout": subprocess.PIPE,
@@ -64,7 +74,11 @@ class HashcatProcessRunner:
             "text": True,
             "encoding": "utf-8",
             "errors": "replace",
+            "env": merged_env,
         }
+
+        if self._cwd is not None:
+            kwargs["cwd"] = str(self._cwd)
 
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]

@@ -57,10 +57,17 @@ def build_command(
     outfile_abs = safe_join_workspace(workspace_root, job.outfile_path)
     args += ["--outfile", str(outfile_abs)]
 
-    # Session and restore
+    # Session and restore — keep restore files inside the workspace
     args += ["--session", job.session_name]
-    restore_abs = workspace_root / "hashcat" / "restore" / f"{job.session_name}.restore"
-    args += ["--restore-file", str(restore_abs)]
+    restore_dir = workspace_root / "hashcat" / "restore"
+    restore_dir.mkdir(parents=True, exist_ok=True)
+    restore_abs = restore_dir / f"{job.session_name}.restore"
+    args += ["--restore-file-path", str(restore_abs)]
+
+    # Limit wordlist segment size to cap RAM usage.
+    # Hashcat default loads the whole wordlist into RAM; 512 MB is a safe ceiling
+    # that still allows good throughput while keeping memory pressure manageable.
+    args += ["--segment-size", "512"]
 
     # Status
     args += ["--status", "--status-json"]
