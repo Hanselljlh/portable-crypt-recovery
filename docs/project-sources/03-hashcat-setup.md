@@ -4,7 +4,7 @@
 
 This step defines how the app finds, stores, verifies, and remembers Hashcat.
 
-Hashcat is the required backend for the Portable Hashcat GUI project.
+Hashcat is the required backend for the Portable VeraCrypt/TrueCrypt Recovery GUI project.
 
 The app does not crack passwords itself. The app prepares and manages Hashcat jobs through a controlled backend layer.
 
@@ -102,18 +102,18 @@ The app should support these Hashcat location methods.
 Default portable location:
 
 ```text
-PortableHashcatGUI/tools/hashcat/
+PCR/tools/hashcat/
 ```
 
 Expected executable examples:
 
 ```text
 Windows:
-PortableHashcatGUI/tools/hashcat/hashcat.exe
+PCR/tools/hashcat/hashcat.exe
 
 Linux:
-PortableHashcatGUI/tools/hashcat/hashcat
-PortableHashcatGUI/tools/hashcat/hashcat.bin
+PCR/tools/hashcat/hashcat
+PCR/tools/hashcat/hashcat.bin
 ```
 
 This should be the preferred location for portable use.
@@ -287,13 +287,13 @@ The app must pass paths as process arguments, not as manually quoted shell text.
 Good internal argument handling:
 
 ```text
-["D:/PortableHashcatGUI/tools/hashcat/hashcat.exe", "--version"]
+["D:/PCR/tools/hashcat/hashcat.exe", "--version"]
 ```
 
 Avoid unsafe shell handling:
 
 ```text
-"D:/PortableHashcatGUI/tools/hashcat/hashcat.exe --version"
+"D:/PCR/tools/hashcat/hashcat.exe --version"
 ```
 
 If the portable folder moves and the Hashcat path was inside it, the app should repair the path using a relative stored path.
@@ -333,7 +333,7 @@ Linux command execution must also use argument arrays.
 Example internal form:
 
 ```text
-["/home/user/PortableHashcatGUI/tools/hashcat/hashcat.bin", "--version"]
+["/home/user/PCR/tools/hashcat/hashcat.bin", "--version"]
 ```
 
 ## Path Storage Rules
@@ -356,7 +356,7 @@ External tool paths should be marked as non-portable.
 Hashcat path data may be stored in:
 
 ```text
-PortableHashcatGUI/config/app-global-settings.json
+PCR/config/app-global-settings.json
 workspace/settings.json
 ```
 
@@ -496,9 +496,9 @@ The app should:
 This step may create or modify these portable app files:
 
 ```text
-PortableHashcatGUI/config/app-global-settings.json
-PortableHashcatGUI/tools/hashcat/*
-PortableHashcatGUI/logs/app-startup.log
+PCR/config/app-global-settings.json
+PCR/tools/hashcat/*
+PCR/logs/app-startup.log
 ```
 
 This step may create or modify these workspace files:
@@ -513,7 +513,7 @@ cleanup/cleanup-manifest.json
 Hashcat itself should usually be stored in:
 
 ```text
-PortableHashcatGUI/tools/hashcat/
+PCR/tools/hashcat/
 ```
 
 or in a user-selected tools folder.
@@ -598,7 +598,7 @@ Open questions for later steps:
 - Hashcat is the required backend.
 - John the Ripper is optional later and not required now.
 - The app should prefer Hashcat inside the portable app tools folder.
-- Default Hashcat folder is `PortableHashcatGUI/tools/hashcat/`.
+- Default Hashcat folder is `PCR/tools/hashcat/`.
 - The user may choose a custom tools folder.
 - The user may browse for an existing Hashcat executable.
 - The app may optionally detect Hashcat from PATH, but PATH detection is not the preferred portable mode.
