@@ -353,21 +353,34 @@ class QueueView:  # pragma: no cover
                     )
                     list_item = QListWidgetItem(label)
                     list_item.setData(256, job_id)
-                    # Color by status
-                    from PySide6.QtGui import QColor
-                    color_map = {
-                        "pending": None,
-                        "running": QColor("#d4edda"),
-                        "paused": QColor("#fff3cd"),
-                        "cracked": QColor("#c3e6cb"),
-                        "exhausted": QColor("#f8d7da"),
-                        "failed": QColor("#f8d7da"),
-                        "stopped_saved": QColor("#ffeeba"),
-                        "skipped": QColor("#e2e3e5"),
+                    # Color by status — dark-theme friendly: dark backgrounds, light text
+                    from PySide6.QtGui import QBrush, QColor
+                    _bg = {
+                        "pending":      None,
+                        "running":      QColor("#1a3a2a"),   # dark green
+                        "paused":       QColor("#3a3010"),   # dark amber
+                        "cracked":      QColor("#0f3020"),   # deeper green
+                        "exhausted":    QColor("#3a1a1a"),   # dark red
+                        "failed":       QColor("#3a1a1a"),   # dark red
+                        "stopped_saved":QColor("#2a2a10"),   # dark yellow-grey
+                        "skipped":      QColor("#222228"),   # dark grey-blue
                     }
-                    color = color_map.get(job.status)
+                    _fg = {
+                        "pending":      None,
+                        "running":      QColor("#7fe0a0"),   # bright green text
+                        "paused":       QColor("#f0c060"),   # amber text
+                        "cracked":      QColor("#50e090"),   # bright green text
+                        "exhausted":    QColor("#e08080"),   # soft red text
+                        "failed":       QColor("#e08080"),   # soft red text
+                        "stopped_saved":QColor("#c0b860"),   # muted yellow text
+                        "skipped":      QColor("#8888aa"),   # muted grey text
+                    }
+                    color = _bg.get(job.status)
                     if color:
-                        list_item.setBackground(color)
+                        list_item.setBackground(QBrush(color))
+                    fg = _fg.get(job.status)
+                    if fg:
+                        list_item.setForeground(QBrush(fg))
                     self.job_list.addItem(list_item)
                     if job_id == current_data:
                         self.job_list.setCurrentItem(list_item)
