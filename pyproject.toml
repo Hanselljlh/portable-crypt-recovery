@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portable-crypt-recovery"
+version = "0.1.0"
+description = "A local, portable Windows and Linux GUI for authorized VeraCrypt and TrueCrypt volume recovery using Hashcat."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "Portable Crypt Recovery contributors" }
+]
+dependencies = [
+  "PySide6>=6.7"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5"
+]
+
+[project.scripts]
+pcr = "portable_crypt_recovery.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
