@@ -184,7 +184,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
 
             def _open_github_issues(self) -> None:
                 QDesktopServices.openUrl(
-                    QUrl("https://github.com/portable-crypt-recovery/portable-crypt-recovery/issues")
+                    QUrl("https://github.com/Hanselljlh/portable-crypt-recovery/issues")
                 )
 
         return _MainWindow()

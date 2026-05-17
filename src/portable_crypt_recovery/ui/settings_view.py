@@ -65,7 +65,7 @@ class SettingsView:  # pragma: no cover
                 for i, dev in enumerate(devices):
                     label = f"{dev.get('label', f'Device {i}')}  —  {dev.get('name', '?')}"
                     cb = QCheckBox(label)
-                    cb.setChecked(str(i) in current_ids or not current_ids)
+                    cb.setChecked(i in current_ids or not current_ids)
                     cb.setProperty("device_index", str(i))
                     lay.addWidget(cb)
                     self._checks.append(cb)
@@ -78,9 +78,9 @@ class SettingsView:  # pragma: no cover
                 btns.rejected.connect(self.reject)
                 lay.addWidget(btns)
 
-            def selected_ids(self) -> list[str]:
+            def selected_ids(self) -> list[int]:
                 return [
-                    cb.property("device_index")
+                    int(cb.property("device_index"))
                     for cb in self._checks
                     if cb.isChecked()
                 ]
@@ -209,7 +209,9 @@ class SettingsView:  # pragma: no cover
                     self.lbl_hc_status.setText("Status: Not configured — browse to hashcat and click Verify")
                     self.lbl_hc_status.setStyleSheet("font-weight: bold; color: #cc4400;")
                 if hc.selected_device_ids:
-                    self.lbl_hc_devices.setText(f"Selected devices: {', '.join(hc.selected_device_ids)}")
+                    self.lbl_hc_devices.setText(
+                        f"Selected devices: {', '.join(str(d) for d in hc.selected_device_ids)}"
+                    )
                 if state.workspace_root:
                     self.lbl_ws_info.setText(
                         f"{state.workspace_name}\n{state.workspace_root}"
@@ -235,7 +237,7 @@ class SettingsView:  # pragma: no cover
                 data["hashcat_path"] = str(hc.executable_path) if hc.executable_path else None
                 data["hashcat_verified"] = hc.verified
                 data["hashcat_version"] = hc.version_string
-                data["selected_compute_devices"] = hc.selected_device_ids
+                data["selected_device_ids"] = hc.selected_device_ids
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 atomic_write_json(settings_path, data)
 
@@ -326,10 +328,11 @@ class SettingsView:  # pragma: no cover
                     return
                 dlg = _DeviceDialog(result.devices, state.hashcat_setup.selected_device_ids, self)
                 if dlg.exec() == QDialog.DialogCode.Accepted:
-                    ids = dlg.selected_ids()
+                    ids = dlg.selected_ids()  # list[int] after fix
                     state.hashcat_setup.selected_device_ids = ids
                     self.lbl_hc_devices.setText(
-                        f"Selected devices: {', '.join(ids)}" if ids else "No devices selected"
+                        f"Selected devices: {', '.join(str(i) for i in ids)}"
+                        if ids else "No devices selected"
                     )
                     self._persist_hashcat_settings()
 
@@ -388,9 +391,13 @@ class SettingsView:  # pragma: no cover
                             state.hashcat_setup.executable_path = hc_path
                             state.hashcat_setup.verified = settings.get("hashcat_verified", False)
                             state.hashcat_setup.version_string = settings.get("hashcat_version", "")
-                            state.hashcat_setup.selected_device_ids = settings.get(
-                                "selected_compute_devices", []
+                            # Load device IDs: canonical key first, legacy fallback
+                            raw_ids = (
+                                settings.get("selected_device_ids")
+                                or settings.get("selected_compute_devices")
+                                or []
                             )
+                            state.hashcat_setup.selected_device_ids = [int(d) for d in raw_ids]
                     except Exception:
                         pass
 
@@ -418,6 +425,15 @@ class SettingsView:  # pragma: no cover
                     state.header_count = len(list_header_ids(workspace_root))
                 except Exception:
                     state.header_count = 0
+                try:
+                    queue_file = workspace_root / "queue" / "queue-state.json"
+                    if queue_file.exists():
+                        qs_data = json.loads(queue_file.read_text(encoding="utf-8"))
+                        state.job_count = len(qs_data.get("jobs", {}))
+                    else:
+                        state.job_count = 0
+                except Exception:
+                    state.job_count = 0
 
             # ── Preferences ───────────────────────────────────────────────
 

@@ -51,6 +51,15 @@ def export_diagnostic_bundle(
 
     # Workspace info
     workspace_json = workspace_root / "workspace.json"
+    workspace_id = ""
+    if workspace_json.exists():
+        try:
+            import json as _json
+            workspace_id = _json.loads(
+                workspace_json.read_text(encoding="utf-8")
+            ).get("workspace_id", "")
+        except Exception:
+            pass
 
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         # Workspace summary (no sensitive data)
@@ -83,7 +92,7 @@ def export_diagnostic_bundle(
     bundle = DiagnosticBundle(
         bundle_id=bundle_id,
         created_timestamp=now_ts,
-        workspace_id="",  # resolved from workspace.json by caller
+        workspace_id=workspace_id,
         app_version=__version__,
         os_summary=os_summary,
         hashcat_version=hashcat_version,

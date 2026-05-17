@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build script for PCR Linux portable release
 # Run from repo root:  bash packaging/linux/build.sh
-# Or with version:     bash packaging/linux/build.sh 0.1.0
+# Or with version:     bash packaging/linux/build.sh 0.1.1
 #
 # Output: dist/PCR-linux-portable/   (ready-to-tar portable folder)
 #         dist/PCR-linux-portable-<version>.tar.gz

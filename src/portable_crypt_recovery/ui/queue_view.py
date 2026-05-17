@@ -135,7 +135,7 @@ class QueueView:  # pragma: no cover
                     return
 
                 # Build command arrays for all pending jobs
-                device_ids = state.hashcat_setup.selected_compute_devices or None
+                device_ids = state.hashcat_setup.selected_device_ids or None
                 errors: list[str] = []
                 for job in pending:
                     if job.command_array:

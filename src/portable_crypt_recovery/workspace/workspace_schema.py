@@ -29,7 +29,7 @@ def default_settings_record() -> dict:
         "schema_version": WORKSPACE_SCHEMA_VERSION,
         "hashcat_path": None,
         "hashcat_path_is_external": False,
-        "selected_compute_devices": [],
+        "selected_device_ids": [],
         "default_queue_behavior_after_crack": "continue_other_uncracked_targets",
         "clipboard_auto_clear_seconds": 60,
         "safety_confirmation_status": False,

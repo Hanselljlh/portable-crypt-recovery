@@ -84,9 +84,8 @@ def try_auto_open_workspace(app_root: Path) -> bool:
                 state.hashcat_setup.executable_path = hc_path
                 state.hashcat_setup.verified = bool(settings.get("hashcat_verified", False))
                 state.hashcat_setup.version_string = settings.get("hashcat_version", "")
-                device_ids = settings.get("selected_compute_devices", [])
-                if device_ids:
-                    state.hashcat_setup.selected_compute_devices = [int(d) for d in device_ids]
+                # device IDs are already loaded by state.load_settings above via
+                # the canonical "selected_device_ids" / legacy "selected_compute_devices" keys.
         except Exception:
             pass
 

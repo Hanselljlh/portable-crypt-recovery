@@ -73,6 +73,15 @@ class AppState:
             self.hashcat_setup.is_portable = not settings.get(
                 "hashcat_path_is_external", False
             )
+        # Load device IDs: try canonical key first, fall back to legacy key for
+        # backward compatibility with workspaces saved before the rename.
+        raw_ids = (
+            settings.get("selected_device_ids")
+            or settings.get("selected_compute_devices")
+            or []
+        )
+        if raw_ids:
+            self.hashcat_setup.selected_device_ids = [int(d) for d in raw_ids]
 
 
 # Module-level singleton

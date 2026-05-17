@@ -60,5 +60,5 @@ def _save_settings() -> None:
         data["hashcat_path"] = str(state.hashcat_setup.executable_path)
         data["hashcat_verified"] = state.hashcat_setup.verified
         data["hashcat_version"] = state.hashcat_setup.version_string or ""
-        data["selected_compute_devices"] = state.hashcat_setup.selected_compute_devices or []
+        data["selected_device_ids"] = state.hashcat_setup.selected_device_ids
     atomic_write_json(settings_file, data)
