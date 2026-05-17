@@ -325,6 +325,8 @@ class QueueView:  # pragma: no cover
                 if item:
                     current_data = item.data(256)
 
+                scroll_pos = self.job_list.verticalScrollBar().value()
+
                 self.job_list.clear()
                 state = get_app_state()
                 if not state.is_workspace_open():
@@ -384,6 +386,23 @@ class QueueView:  # pragma: no cover
                     self.job_list.addItem(list_item)
                     if job_id == current_data:
                         self.job_list.setCurrentItem(list_item)
+
+                # Auto-scroll: jump to the running job if there is one,
+                # otherwise restore the previous scroll position so the list
+                # doesn't snap back to the top on every 2-second poll tick.
+                running_item = None
+                for i in range(self.job_list.count()):
+                    it = self.job_list.item(i)
+                    if it and it.data(256) == qs.current_running_job:
+                        running_item = it
+                        break
+                if running_item:
+                    from PySide6.QtWidgets import QAbstractItemView
+                    self.job_list.scrollToItem(
+                        running_item, QAbstractItemView.ScrollHint.EnsureVisible
+                    )
+                else:
+                    self.job_list.verticalScrollBar().setValue(scroll_pos)
 
             # ------------------------------------------------------------------
             # Button state management
