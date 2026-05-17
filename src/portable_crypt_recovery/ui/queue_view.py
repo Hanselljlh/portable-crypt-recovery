@@ -170,12 +170,12 @@ class QueueView:  # pragma: no cover
                 progress.show()
                 QApplication.processEvents()
 
-                # Build command arrays for all pending jobs
+                # Always rebuild command arrays when starting the queue so that
+                # any code changes (flags, paths) take effect immediately rather
+                # than reusing a stale array stored in queue-state.json.
                 device_ids = state.hashcat_setup.selected_device_ids or None
                 errors: list[str] = []
                 for job in pending:
-                    if job.command_array:
-                        continue  # already built
                     try:
                         job.command_array = build_command_with_devices(
                             job, hashcat_exe, ws, device_ids
@@ -293,6 +293,9 @@ class QueueView:  # pragma: no cover
                     from portable_crypt_recovery.core.timestamps import utc_now_iso
                     qs.jobs[job_id].status = new_status
                     qs.jobs[job_id].updated_timestamp = utc_now_iso()
+                    # Clear stale command array so it is rebuilt fresh on next start
+                    if new_status == "pending":
+                        qs.jobs[job_id].command_array = []
                     atomic_write_json(queue_file, qs.to_dict())
                     self._refresh_list()
 
