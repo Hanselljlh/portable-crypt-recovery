@@ -57,9 +57,31 @@ class QueueView:  # pragma: no cover
                 layout.addLayout(status_row)
                 layout.addWidget(self.progress_bar)
 
-                # Job list
+                # Job list + log viewer in a splitter
+                from PySide6.QtWidgets import QPlainTextEdit, QSplitter
+                from PySide6.QtCore import Qt as _Qt
+                splitter = QSplitter(_Qt.Orientation.Vertical)
+
                 self.job_list = QListWidget()
-                layout.addWidget(self.job_list, 1)
+                splitter.addWidget(self.job_list)
+
+                log_widget = QWidget()
+                log_layout = QVBoxLayout(log_widget)
+                log_layout.setContentsMargins(0, 4, 0, 0)
+                self.lbl_log_header = QLabel("Select a job to view its log")
+                self.lbl_log_header.setStyleSheet("color: gray; font-size: 11px;")
+                log_layout.addWidget(self.lbl_log_header)
+                self.txt_log = QPlainTextEdit()
+                self.txt_log.setReadOnly(True)
+                self.txt_log.setMaximumBlockCount(200)
+                self.txt_log.setStyleSheet(
+                    "font-family: Consolas, monospace; font-size: 11px;"
+                )
+                log_layout.addWidget(self.txt_log)
+                splitter.addWidget(log_widget)
+
+                splitter.setSizes([300, 200])
+                layout.addWidget(splitter, 1)
 
                 # Wire buttons
                 self.btn_start.clicked.connect(self._start_queue)
@@ -70,6 +92,7 @@ class QueueView:  # pragma: no cover
                 self.btn_resume.clicked.connect(self._resume)
                 self.btn_skip.clicked.connect(self._skip_selected)
                 self.btn_restart.clicked.connect(self._restart_selected)
+                self.job_list.currentItemChanged.connect(self._on_job_selected)
 
                 # Poll timer
                 self._timer = QTimer(self)
@@ -274,6 +297,73 @@ class QueueView:  # pragma: no cover
                     self._refresh_list()
 
             # ------------------------------------------------------------------
+            # Job selection → log viewer
+            # ------------------------------------------------------------------
+
+            def _on_job_selected(self, current, _previous) -> None:
+                """Load and display log + command array for the selected job."""
+                import json
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.models.queue_state import QueueState
+
+                if current is None:
+                    self.lbl_log_header.setText("Select a job to view its log")
+                    self.txt_log.clear()
+                    return
+
+                job_id = current.data(256)
+                state = get_app_state()
+                if not state.is_workspace_open():
+                    return
+
+                queue_file = state.workspace_root / "queue" / "queue-state.json"
+                try:
+                    qs = QueueState.from_dict(
+                        json.loads(queue_file.read_text(encoding="utf-8"))
+                    )
+                except Exception:
+                    return
+
+                job = qs.jobs.get(job_id)
+                if job is None:
+                    return
+
+                lines: list[str] = []
+
+                # Command array
+                if job.command_array:
+                    lines.append("=== COMMAND ===")
+                    lines.append(" ".join(job.command_array))
+                    lines.append("")
+                else:
+                    lines.append("=== COMMAND ===")
+                    lines.append("(not yet built — expand to queue and start to generate)")
+                    lines.append("")
+
+                # Log file
+                log_abs = state.workspace_root / job.log_path
+                self.lbl_log_header.setText(
+                    f"Job {job_id[:8]}  |  mode {job.hashcat_mode}  |  status: {job.status}"
+                    f"  |  log: {job.log_path}"
+                )
+                if log_abs.exists():
+                    try:
+                        log_lines = log_abs.read_text(encoding="utf-8", errors="replace").splitlines()
+                        lines.append("=== LOG (last 80 lines) ===")
+                        lines += log_lines[-80:]
+                    except OSError as exc:
+                        lines.append(f"(could not read log: {exc})")
+                else:
+                    lines.append("=== LOG ===")
+                    lines.append("(no log file yet — job has not run)")
+
+                self.txt_log.setPlainText("\n".join(lines))
+                # scroll to bottom so the most recent lines are visible
+                sb = self.txt_log.verticalScrollBar()
+                sb.setValue(sb.maximum())
+
+            # ------------------------------------------------------------------
             # Polling / Refresh
             # ------------------------------------------------------------------
 
@@ -311,6 +401,8 @@ class QueueView:  # pragma: no cover
                     self.lbl_running.setText("No job running")
 
                 self._refresh_list()
+                # Keep the log panel fresh for whichever job is selected
+                self._on_job_selected(self.job_list.currentItem(), None)
 
             def _refresh_list(self) -> None:
                 import json

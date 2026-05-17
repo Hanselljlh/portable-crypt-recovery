@@ -57,12 +57,13 @@ def build_command(
     outfile_abs = safe_join_workspace(workspace_root, job.outfile_path)
     args += ["--outfile", str(outfile_abs)]
 
-    # Session and restore — keep restore files inside the workspace
+    # Session name — used for status display only.
+    # PCR manages queue state itself so we disable hashcat's own restore
+    # mechanism: --restore-disable is supported by all hashcat 6.x versions
+    # and avoids the --restore-file-path flag which was only added in 6.1
+    # and causes "Unknown option" fatal errors on older builds.
     args += ["--session", job.session_name]
-    restore_dir = workspace_root / "hashcat" / "restore"
-    restore_dir.mkdir(parents=True, exist_ok=True)
-    restore_abs = restore_dir / f"{job.session_name}.restore"
-    args += ["--restore-file-path", str(restore_abs)]
+    args += ["--restore-disable"]
 
     # Limit wordlist segment size to cap RAM usage.
     # Hashcat default loads the whole wordlist into RAM; 512 MB is a safe ceiling
