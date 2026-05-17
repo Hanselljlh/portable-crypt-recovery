@@ -84,6 +84,9 @@ class QueuedJob:
     created_timestamp: str = ""
     updated_timestamp: str = ""
     notes: str = ""
+    # Draft provenance — which draft this job was expanded from
+    draft_id: str = ""
+    draft_label: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -108,6 +111,8 @@ class QueuedJob:
             "created_timestamp": self.created_timestamp,
             "updated_timestamp": self.updated_timestamp,
             "notes": self.notes,
+            "draft_id": self.draft_id,
+            "draft_label": self.draft_label,
         }
 
     @classmethod
@@ -133,4 +138,6 @@ class QueuedJob:
             created_timestamp=data.get("created_timestamp", ""),
             updated_timestamp=data.get("updated_timestamp", ""),
             notes=data.get("notes", ""),
+            draft_id=data.get("draft_id", ""),
+            draft_label=data.get("draft_label", ""),
         )

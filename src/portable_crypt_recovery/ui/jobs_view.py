@@ -250,6 +250,8 @@ class JobsView:  # pragma: no cover
                     qs = QueueState()
 
                 for job in jobs:
+                    job.draft_id = draft.get("draft_id", "")
+                    job.draft_label = draft.get("label", "")
                     qs.jobs[job.job_id] = job
                     qs.queue_order.append(job.job_id)
 
@@ -700,10 +702,11 @@ class _NewJobDraftDialog:  # pragma: no cover
                             workspace_root=self._workspace_root,
                             force=False,
                         )
-                        pim_count = max(len(pim_set.entries), 1)
+                        pim_count = max(len(pim_set.values), 1)
                     else:
                         pim_set = build_default_pim_set()
-                        pim_count = max(len(pim_set.entries), 1)
+                        # default PIM = 1 implicit job per mode
+                        pim_count = 1
                     n_kf = len(keyfile_paths)
                     kf_count = max(1, (2 ** n_kf) - 1) if n_kf > 0 else 1
                     estimated_job_count = mode_count * pim_count * kf_count

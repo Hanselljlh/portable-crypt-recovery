@@ -519,6 +519,8 @@ class QueueView:  # pragma: no cover
             def _refresh_list(self) -> None:
                 import json
 
+                from PySide6.QtCore import Qt
+                from PySide6.QtGui import QBrush, QColor
                 from PySide6.QtWidgets import QListWidgetItem
 
                 from portable_crypt_recovery.app.app_state import get_app_state
@@ -547,53 +549,97 @@ class QueueView:  # pragma: no cover
                 except Exception:
                     return
 
+                # --- Color maps (dark-theme friendly) ---
+                _bg = {
+                    "pending":       None,
+                    "running":       QColor("#1a3a2a"),
+                    "paused":        QColor("#3a3010"),
+                    "cracked":       QColor("#0f3020"),
+                    "exhausted":     QColor("#3a1a1a"),
+                    "failed":        QColor("#3a1a1a"),
+                    "stopped_saved": QColor("#2a2a10"),
+                    "skipped":       QColor("#222228"),
+                }
+                _fg = {
+                    "pending":       None,
+                    "running":       QColor("#7fe0a0"),
+                    "paused":        QColor("#f0c060"),
+                    "cracked":       QColor("#50e090"),
+                    "exhausted":     QColor("#e08080"),
+                    "failed":        QColor("#e08080"),
+                    "stopped_saved": QColor("#c0b860"),
+                    "skipped":       QColor("#8888aa"),
+                }
+
+                # --- Group jobs by draft (preserving queue order) ---
+                # Build ordered list of (draft_id, draft_label) groups
+                seen_drafts: list[tuple[str, str]] = []
+                seen_draft_ids: set[str] = set()
                 for job_id in qs.queue_order:
                     job = qs.jobs.get(job_id)
                     if job is None:
                         continue
-                    pim_label = f"PIM={job.pim_value}" if job.pim_mode == "custom" else "default PIM"
-                    label = (
-                        f"[{job.status.upper():<14}]  "
-                        f"mode={job.hashcat_mode}  {pim_label}  "
-                        f"session={job.session_name}"
-                    )
-                    list_item = QListWidgetItem(label)
-                    list_item.setData(256, job_id)
-                    # Color by status — dark-theme friendly: dark backgrounds, light text
-                    from PySide6.QtGui import QBrush, QColor
-                    _bg = {
-                        "pending":      None,
-                        "running":      QColor("#1a3a2a"),   # dark green
-                        "paused":       QColor("#3a3010"),   # dark amber
-                        "cracked":      QColor("#0f3020"),   # deeper green
-                        "exhausted":    QColor("#3a1a1a"),   # dark red
-                        "failed":       QColor("#3a1a1a"),   # dark red
-                        "stopped_saved":QColor("#2a2a10"),   # dark yellow-grey
-                        "skipped":      QColor("#222228"),   # dark grey-blue
-                    }
-                    _fg = {
-                        "pending":      None,
-                        "running":      QColor("#7fe0a0"),   # bright green text
-                        "paused":       QColor("#f0c060"),   # amber text
-                        "cracked":      QColor("#50e090"),   # bright green text
-                        "exhausted":    QColor("#e08080"),   # soft red text
-                        "failed":       QColor("#e08080"),   # soft red text
-                        "stopped_saved":QColor("#c0b860"),   # muted yellow text
-                        "skipped":      QColor("#8888aa"),   # muted grey text
-                    }
-                    color = _bg.get(job.status)
-                    if color:
-                        list_item.setBackground(QBrush(color))
-                    fg = _fg.get(job.status)
-                    if fg:
-                        list_item.setForeground(QBrush(fg))
-                    self.job_list.addItem(list_item)
-                    if job_id == current_data:
-                        self.job_list.setCurrentItem(list_item)
+                    did = job.draft_id or ""
+                    if did not in seen_draft_ids:
+                        seen_draft_ids.add(did)
+                        seen_drafts.append((did, job.draft_label or did or "Ungrouped jobs"))
 
-                # Auto-scroll: jump to the running job if there is one,
-                # otherwise restore the previous scroll position so the list
-                # doesn't snap back to the top on every 2-second poll tick.
+                # Count status per draft for the header summary
+                draft_status_counts: dict[str, dict[str, int]] = {}
+                for job_id in qs.queue_order:
+                    job = qs.jobs.get(job_id)
+                    if job is None:
+                        continue
+                    did = job.draft_id or ""
+                    draft_status_counts.setdefault(did, {})
+                    draft_status_counts[did][job.status] = (
+                        draft_status_counts[did].get(job.status, 0) + 1
+                    )
+
+                # --- Render: separator header then jobs for each draft ---
+                for draft_id, draft_label in seen_drafts:
+                    # Count jobs and build a short status summary
+                    sc = draft_status_counts.get(draft_id, {})
+                    total = sum(sc.values())
+                    parts = []
+                    for st in ("running", "pending", "cracked", "exhausted", "failed",
+                               "paused", "stopped_saved", "skipped"):
+                        n = sc.get(st, 0)
+                        if n:
+                            parts.append(f"{n} {st}")
+                    summary = "  ·  ".join(parts) if parts else "0 jobs"
+
+                    sep = QListWidgetItem(f"▶  {draft_label}  ({total} jobs: {summary})")
+                    sep.setFlags(Qt.ItemFlag.NoItemFlags)   # not selectable
+                    sep.setBackground(QBrush(QColor("#1e2a3a")))
+                    sep.setForeground(QBrush(QColor("#88b8e8")))
+                    self.job_list.addItem(sep)
+
+                    for job_id in qs.queue_order:
+                        job = qs.jobs.get(job_id)
+                        if job is None:
+                            continue
+                        if (job.draft_id or "") != draft_id:
+                            continue
+                        pim_label = f"PIM={job.pim_value}" if job.pim_mode == "custom" else "default PIM"
+                        label = (
+                            f"  [{job.status.upper():<14}]  "
+                            f"mode={job.hashcat_mode}  {pim_label}  "
+                            f"session={job.session_name}"
+                        )
+                        list_item = QListWidgetItem(label)
+                        list_item.setData(256, job_id)
+                        color = _bg.get(job.status)
+                        if color:
+                            list_item.setBackground(QBrush(color))
+                        fg = _fg.get(job.status)
+                        if fg:
+                            list_item.setForeground(QBrush(fg))
+                        self.job_list.addItem(list_item)
+                        if job_id == current_data:
+                            self.job_list.setCurrentItem(list_item)
+
+                # Auto-scroll: jump to running job, else restore scroll position
                 running_item = None
                 for i in range(self.job_list.count()):
                     it = self.job_list.item(i)
