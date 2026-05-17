@@ -58,8 +58,8 @@ class QueueView:  # pragma: no cover
                 layout.addWidget(self.progress_bar)
 
                 # Job list + log viewer in a splitter
-                from PySide6.QtWidgets import QPlainTextEdit, QSplitter
                 from PySide6.QtCore import Qt as _Qt
+                from PySide6.QtWidgets import QPlainTextEdit, QSplitter
                 splitter = QSplitter(_Qt.Orientation.Vertical)
 
                 self.job_list = QListWidget()
