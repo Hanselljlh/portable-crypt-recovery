@@ -1,12 +1,16 @@
-# PyInstaller spec for Linux one-folder build
+# PyInstaller spec for Linux one-folder build (PyInstaller 6.x)
 # Usage: pyinstaller packaging/linux/pyinstaller-one-folder.spec
 
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 repo_root = Path(SPECPATH).parent.parent
 src_dir = str(repo_root / "src")
 
-block_cipher = None
+hidden = (
+    collect_submodules("portable_crypt_recovery")
+    + ["PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets"]
+)
 
 a = Analysis(
     [str(repo_root / "src" / "portable_crypt_recovery" / "main.py")],
@@ -15,29 +19,14 @@ a = Analysis(
     datas=[
         (str(repo_root / "docs"), "docs"),
     ],
-    hiddenimports=[
-        "portable_crypt_recovery",
-        "portable_crypt_recovery.app",
-        "portable_crypt_recovery.core",
-        "portable_crypt_recovery.models",
-        "portable_crypt_recovery.workspace",
-        "portable_crypt_recovery.services",
-        "portable_crypt_recovery.ui",
-        "PySide6.QtCore",
-        "PySide6.QtGui",
-        "PySide6.QtWidgets",
-    ],
+    hiddenimports=hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
+    excludes=["tkinter", "unittest", "email", "xml", "http", "multiprocessing"],
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -47,7 +36,7 @@ exe = EXE(
     name="PCR",
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     console=False,
     disable_windowed_traceback=False,
@@ -62,7 +51,7 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     name="PCR",
