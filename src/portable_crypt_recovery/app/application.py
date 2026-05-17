@@ -12,10 +12,11 @@ def run_app(argv: list[str]) -> int:
     PySide6 is imported lazily so backend tests can run without creating a GUI.
     """
     from portable_crypt_recovery.app.autosave import start as start_autosave
-    from portable_crypt_recovery.app.startup import try_auto_open_workspace
+    from portable_crypt_recovery.app.startup import try_auto_open_workspace, try_detect_hashcat
 
     app_root = ensure_default_portable_layout()
     opened = try_auto_open_workspace(app_root)
+    try_detect_hashcat(app_root)
 
     try:
         from PySide6.QtWidgets import QApplication

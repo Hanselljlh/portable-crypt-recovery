@@ -28,6 +28,29 @@ def ensure_default_portable_layout(root: Path | None = None) -> Path:
     return base
 
 
+def try_detect_hashcat(app_root: Path) -> bool:
+    """Auto-detect hashcat from the portable tools folder if not already configured.
+
+    Checks ``tools/hashcat/hashcat.exe`` (Windows) and ``tools/hashcat/hashcat``
+    (Linux/macOS). Only sets the path — does not verify. Returns True if detected.
+    """
+    from portable_crypt_recovery.app.app_state import get_app_state
+
+    state = get_app_state()
+    if state.hashcat_setup.executable_path:
+        return False  # already configured
+
+    candidates = [
+        app_root / "tools" / "hashcat" / "hashcat.exe",
+        app_root / "tools" / "hashcat" / "hashcat",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            state.hashcat_setup.executable_path = str(candidate)
+            return True
+    return False
+
+
 def try_auto_open_workspace(app_root: Path) -> bool:
     """Open the default workspace into AppState if it exists.
 
