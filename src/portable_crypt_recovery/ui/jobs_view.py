@@ -187,19 +187,17 @@ class JobsView:  # pragma: no cover
 
                 ws = state.workspace_root
 
-                # Hash modes
-                include_legacy = (draft.get("hash_mode_strategy") != "current_only")
-                mode_set = build_mode_set(
-                    family=draft.get("family", "unknown"),
-                    candidate_type=draft.get("candidate_type", "normal_volume_header"),
-                    target_id=draft["target_id"],
-                    header_id=draft["header_id"],
-                    include_legacy=include_legacy,
-                )
-                if not mode_set.entries:
-                    raise ValueError("No hash modes available for this family/header combination.")
+                from portable_crypt_recovery.services.headers.metadata import load_header_metadata
 
-                # PIM
+                # Support both new multi-header drafts and old single-header drafts
+                header_ids: list[str] = draft.get("header_ids") or [draft.get("header_id", "")]
+                header_ids = [h for h in header_ids if h]  # strip empties
+                if not header_ids:
+                    raise ValueError("Draft has no header IDs.")
+
+                include_legacy = (draft.get("hash_mode_strategy") != "current_only")
+
+                # PIM (shared across all headers)
                 pim_mode = draft.get("pim_mode", "default")
                 if pim_mode == "custom":
                     pim_set = build_pim_set(
@@ -210,14 +208,14 @@ class JobsView:  # pragma: no cover
                 else:
                     pim_set = build_default_pim_set()
 
-                # Keyfiles
+                # Keyfiles (shared across all headers)
                 keyfile_paths = draft.get("keyfile_paths", [])
                 keyfile_sets = None
                 if keyfile_paths:
                     entries = [import_keyfile(Path(p), ws) for p in keyfile_paths]
                     keyfile_sets = build_keyfile_combinations(entries, max_per_set=len(entries))
 
-                # Password source
+                # Password source (shared across all headers)
                 pw_type = draft.get("password_source_type", "manual")
                 if pw_type == "wordlist":
                     wl_path = Path(draft.get("password_wordlist_path", ""))
@@ -229,17 +227,7 @@ class JobsView:  # pragma: no cover
                         raise ValueError("Password list is empty.")
                     password_source = build_manual_password_source(passwords, ws)
 
-                jobs = expand_jobs(
-                    target_id=draft["target_id"],
-                    header_id=draft["header_id"],
-                    mode_set=mode_set,
-                    pim_set=pim_set,
-                    keyfile_sets=keyfile_sets,
-                    password_source=password_source,
-                    workspace_root=ws,
-                )
-
-                # Persist to queue/queue-state.json
+                # Load queue state once
                 queue_file = ws / "queue" / "queue-state.json"
                 queue_file.parent.mkdir(parents=True, exist_ok=True)
                 try:
@@ -249,14 +237,47 @@ class JobsView:  # pragma: no cover
                 except Exception:
                     qs = QueueState()
 
-                for job in jobs:
-                    job.draft_id = draft.get("draft_id", "")
-                    job.draft_label = draft.get("label", "")
-                    qs.jobs[job.job_id] = job
-                    qs.queue_order.append(job.job_id)
+                all_jobs: list = []
+                for header_id in header_ids:
+                    # Resolve candidate_type from stored metadata
+                    try:
+                        header_meta = load_header_metadata(ws, header_id)
+                        candidate_type = header_meta.candidate_type
+                    except Exception:
+                        candidate_type = draft.get("candidate_type", "normal_volume_header")
+
+                    mode_set = build_mode_set(
+                        family=draft.get("family", "unknown"),
+                        candidate_type=candidate_type,
+                        target_id=draft["target_id"],
+                        header_id=header_id,
+                        include_legacy=include_legacy,
+                    )
+                    if not mode_set.entries:
+                        continue  # skip headers with no valid modes
+
+                    jobs = expand_jobs(
+                        target_id=draft["target_id"],
+                        header_id=header_id,
+                        mode_set=mode_set,
+                        pim_set=pim_set,
+                        keyfile_sets=keyfile_sets,
+                        password_source=password_source,
+                        workspace_root=ws,
+                    )
+
+                    for job in jobs:
+                        job.draft_id = draft.get("draft_id", "")
+                        job.draft_label = draft.get("label", "")
+                        qs.jobs[job.job_id] = job
+                        qs.queue_order.append(job.job_id)
+                        all_jobs.append(job)
+
+                if not all_jobs:
+                    raise ValueError("No hash modes available for any selected header.")
 
                 atomic_write_json(queue_file, qs.to_dict())
-                return len(jobs)
+                return len(all_jobs)
 
             def _mark_draft_sent(self, draft: dict, count: int, state) -> None:
                 import json
@@ -402,12 +423,17 @@ class JobsView:  # pragma: no cover
                             badge = "○ not sent  "
                         family = d.get("family", "unknown")
                         name = d.get("label", d.get("draft_id", "?"))
-                        ctype = d.get("candidate_type", "normal_volume_header")
-                        ctype_short = (
-                            ctype.replace("_volume_header", "").replace("_", " ").strip()
-                            or ctype
-                        )
-                        line1 = f"{badge}{name}  [{family}]  ·  {ctype_short}"
+                        header_ids_list = d.get("header_ids") or [d.get("header_id", "")]
+                        n_headers = len([h for h in header_ids_list if h])
+                        if n_headers > 1:
+                            hdr_badge = f"{n_headers} headers"
+                        else:
+                            ctype = d.get("candidate_type", "normal_volume_header")
+                            hdr_badge = (
+                                ctype.replace("_volume_header", "").replace("_", " ").strip()
+                                or ctype
+                            )
+                        line1 = f"{badge}{name}  [{family}]  ·  {hdr_badge}"
 
                         # --- Line 2: settings detail ---
                         strategy = (
@@ -477,18 +503,23 @@ class _NewJobDraftDialog:  # pragma: no cover
                 layout = QVBoxLayout(self)
 
                 # Target + Header selection
-                tgt_group = QGroupBox("Target & Header")
+                tgt_group = QGroupBox("Target & Headers")
                 tgt_layout = QVBoxLayout(tgt_group)
                 row1 = QHBoxLayout()
                 row1.addWidget(QLabel("Target:"))
                 self.cmb_target = QComboBox()
                 row1.addWidget(self.cmb_target, 1)
                 tgt_layout.addLayout(row1)
-                row2 = QHBoxLayout()
-                row2.addWidget(QLabel("Header:"))
-                self.cmb_header = QComboBox()
-                row2.addWidget(self.cmb_header, 1)
-                tgt_layout.addLayout(row2)
+                tgt_layout.addWidget(QLabel(
+                    "Headers (all selected by default — deselect any you want to skip):"
+                ))
+                from PySide6.QtWidgets import QAbstractItemView
+                self.lst_headers = QListWidget()
+                self.lst_headers.setSelectionMode(
+                    QAbstractItemView.SelectionMode.ExtendedSelection
+                )
+                self.lst_headers.setMaximumHeight(100)
+                tgt_layout.addWidget(self.lst_headers)
                 layout.addWidget(tgt_group)
 
                 # Hash modes
@@ -593,7 +624,9 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self._on_target_changed(0)
 
             def _on_target_changed(self, _index: int) -> None:
-                self.cmb_header.clear()
+                from PySide6.QtWidgets import QListWidgetItem
+
+                self.lst_headers.clear()
                 tgt = self.cmb_target.currentData()
                 if not tgt or not self._workspace_root:
                     return
@@ -606,12 +639,22 @@ class _NewJobDraftDialog:  # pragma: no cover
                     try:
                         h = load_header_metadata(self._workspace_root, hid)
                         if h.target_id == target_id:
-                            self.cmb_header.addItem(
-                                f"{h.candidate_type}  |  {h.header_id[:8]}",
-                                userData=h,
+                            ctype_short = (
+                                h.candidate_type
+                                .replace("_volume_header", "")
+                                .replace("_", " ")
+                                .strip()
+                                or h.candidate_type
                             )
+                            item = QListWidgetItem(
+                                f"{ctype_short}  |  {h.header_id[:8]}"
+                            )
+                            item.setData(256, h)
+                            self.lst_headers.addItem(item)
                     except Exception:
                         pass
+                # Default: select all headers
+                self.lst_headers.selectAll()
 
             def _on_pw_type_changed(self, checked: bool) -> None:
                 self.txt_passwords.setEnabled(not checked)
@@ -655,8 +698,16 @@ class _NewJobDraftDialog:  # pragma: no cover
                 if not tgt:
                     QMessageBox.warning(self, "Missing Target", "Please select a target.")
                     return
-                header_obj = self.cmb_header.currentData()
-                if not header_obj:
+
+                selected_header_items = self.lst_headers.selectedItems()
+                if not selected_header_items:
+                    QMessageBox.warning(
+                        self, "No Headers Selected",
+                        "Select at least one header to crack."
+                    )
+                    return
+                header_objs = [it.data(256) for it in selected_header_items if it.data(256)]
+                if not header_objs:
                     QMessageBox.warning(self, "Missing Header", "No headers available for this target.")
                     return
 
@@ -676,26 +727,50 @@ class _NewJobDraftDialog:  # pragma: no cover
                 ]
 
                 target_name = tgt.get("display_name", "?")
-                candidate_type = header_obj.candidate_type if hasattr(header_obj, "candidate_type") else "normal_volume_header"
+                header_ids = [h.header_id for h in header_objs]
+                candidate_types = [
+                    getattr(h, "candidate_type", "normal_volume_header")
+                    for h in header_objs
+                ]
 
-                # Estimate job count (mode × pim × kf combos)
+                # Build a readable label
+                if len(header_objs) == 1:
+                    ctype_short = (
+                        candidate_types[0]
+                        .replace("_volume_header", "")
+                        .replace("_", " ")
+                        .strip()
+                        or candidate_types[0]
+                    )
+                    draft_label = f"{target_name} — {ctype_short}"
+                else:
+                    type_shorts = [
+                        ct.replace("_volume_header", "").replace("_", " ").strip() or ct
+                        for ct in candidate_types
+                    ]
+                    draft_label = f"{target_name} — {len(header_objs)} headers ({', '.join(type_shorts)})"
+
+                # Estimate job count (headers × modes per header × pim × kf combos)
                 estimated_job_count = 0
                 try:
                     from portable_crypt_recovery.services.builders.hash_mode_builder import (
                         build_mode_set,
                     )
                     from portable_crypt_recovery.services.builders.pim_builder import (
-                        build_default_pim_set,
                         build_pim_set,
                     )
-                    mode_set = build_mode_set(
-                        family=tgt.get("container_family", "unknown"),
-                        candidate_type=candidate_type,
-                        target_id=tgt["target_id"],
-                        header_id=header_obj.header_id,
-                        include_legacy=not self.rad_current.isChecked(),
-                    )
-                    mode_count = len(mode_set.entries)
+                    include_legacy = not self.rad_current.isChecked()
+                    total_modes = 0
+                    for h_obj in header_objs:
+                        ctype = getattr(h_obj, "candidate_type", "normal_volume_header")
+                        ms = build_mode_set(
+                            family=tgt.get("container_family", "unknown"),
+                            candidate_type=ctype,
+                            target_id=tgt["target_id"],
+                            header_id=h_obj.header_id,
+                            include_legacy=include_legacy,
+                        )
+                        total_modes += len(ms.entries)
                     if self.rad_pim_custom.isChecked():
                         pim_set = build_pim_set(
                             self.txt_pim.text().strip(),
@@ -704,22 +779,22 @@ class _NewJobDraftDialog:  # pragma: no cover
                         )
                         pim_count = max(len(pim_set.values), 1)
                     else:
-                        pim_set = build_default_pim_set()
-                        # default PIM = 1 implicit job per mode
                         pim_count = 1
                     n_kf = len(keyfile_paths)
                     kf_count = max(1, (2 ** n_kf) - 1) if n_kf > 0 else 1
-                    estimated_job_count = mode_count * pim_count * kf_count
+                    estimated_job_count = total_modes * pim_count * kf_count
                 except Exception:
                     estimated_job_count = 0
 
                 self.draft = {
                     "draft_id": new_id("draft"),
-                    "label": f"{target_name} — {candidate_type}",
+                    "label": draft_label,
                     "target_id": tgt["target_id"],
-                    "header_id": header_obj.header_id,
+                    "header_ids": header_ids,
+                    # Keep single-header fields for backward compat with old drafts
+                    "header_id": header_ids[0],
                     "family": tgt.get("container_family", "unknown"),
-                    "candidate_type": candidate_type,
+                    "candidate_type": candidate_types[0],
                     "hash_mode_strategy": "current_only" if self.rad_current.isChecked() else "all",
                     "pim_mode": "custom" if self.rad_pim_custom.isChecked() else "default",
                     "pim_raw_input": self.txt_pim.text().strip(),

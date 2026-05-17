@@ -22,7 +22,10 @@ class QueueView:  # pragma: no cover
         class _QueueView(QWidget):
             def __init__(self) -> None:
                 super().__init__()
-                self._runner = None  # active QueueRunner or None
+                self._runner = None      # active QueueRunner or None
+                self._job_list_follow = True   # auto-scroll job list to running job
+                self._log_follow = True        # auto-scroll log to bottom for live job
+                self._log_job_id = ""          # job ID currently displayed in log panel
                 layout = QVBoxLayout(self)
 
                 # Queue controls
@@ -108,8 +111,52 @@ class QueueView:  # pragma: no cover
                 self._timer.setInterval(2000)
                 self._timer.timeout.connect(self._poll_status)
 
+                # Smart auto-scroll for job list:
+                # sliderPressed = user grabbed bar → stop following
+                # valueChanged at max = user scrolled to bottom → resume following
+                self.job_list.verticalScrollBar().sliderPressed.connect(
+                    self._on_job_list_slider_pressed
+                )
+                self.job_list.verticalScrollBar().valueChanged.connect(
+                    self._on_job_list_scroll_changed
+                )
+
+                # Smart auto-scroll for log panel:
+                # sliderPressed = user grabbed bar → stop following
+                # valueChanged at max = user scrolled to bottom → resume following
+                self.txt_log.verticalScrollBar().sliderPressed.connect(
+                    self._on_log_slider_pressed
+                )
+                self.txt_log.verticalScrollBar().valueChanged.connect(
+                    self._on_log_scroll_changed
+                )
+
                 self._refresh_list()
                 self._update_button_states(queue_status="stopped")
+
+            # ------------------------------------------------------------------
+            # Smart auto-scroll helpers
+            # ------------------------------------------------------------------
+
+            def _on_job_list_slider_pressed(self) -> None:
+                """User grabbed the job list scrollbar — stop following running job."""
+                self._job_list_follow = False
+
+            def _on_job_list_scroll_changed(self, value: int) -> None:
+                """Re-enable follow when user scrolls back to the bottom of the job list."""
+                sb = self.job_list.verticalScrollBar()
+                if value >= sb.maximum():
+                    self._job_list_follow = True
+
+            def _on_log_slider_pressed(self) -> None:
+                """User grabbed the log scrollbar — stop auto-scrolling the log."""
+                self._log_follow = False
+
+            def _on_log_scroll_changed(self, value: int) -> None:
+                """Re-enable log follow when user scrolls back to the bottom."""
+                sb = self.txt_log.verticalScrollBar()
+                if value >= sb.maximum():
+                    self._log_follow = True
 
             # ------------------------------------------------------------------
             # Start
@@ -443,6 +490,18 @@ class QueueView:  # pragma: no cover
                 if job is None:
                     return
 
+                # Track whether this is a fresh job selection or a poll refresh
+                # for the same job that's already displayed.
+                is_new_job = (job_id != self._log_job_id)
+                self._log_job_id = job_id
+                if is_new_job:
+                    # User clicked a different job — reset follow state
+                    self._log_follow = True
+
+                # Save scroll position before setPlainText wipes it
+                log_sb = self.txt_log.verticalScrollBar()
+                saved_log_pos = log_sb.value()
+
                 lines: list[str] = []
 
                 # ---- CRACKED BANNER (top, hard to miss) ----
@@ -503,13 +562,20 @@ class QueueView:  # pragma: no cover
                     )
 
                 self.txt_log.setPlainText("\n".join(lines))
-                # For cracked jobs scroll to top so the banner is visible;
-                # for running jobs scroll to bottom to show live output.
-                sb = self.txt_log.verticalScrollBar()
-                if job.status == "cracked":
-                    sb.setValue(0)
+                # setPlainText resets scroll to 0; apply smart scroll:
+                # - New job selected: scroll per status and (re-)enable following
+                # - Same job, following enabled: scroll per status
+                # - Same job, user scrolled away: restore their previous position
+                log_sb = self.txt_log.verticalScrollBar()
+                if is_new_job or self._log_follow:
+                    if job.status == "cracked":
+                        log_sb.setValue(0)
+                    else:
+                        log_sb.setValue(log_sb.maximum())
                 else:
-                    sb.setValue(sb.maximum())
+                    # Restore user's reading position (content may have grown,
+                    # so clamp to new maximum just in case)
+                    log_sb.setValue(min(saved_log_pos, log_sb.maximum()))
 
             # ------------------------------------------------------------------
             # Polling / Refresh
@@ -675,14 +741,15 @@ class QueueView:  # pragma: no cover
                         if job_id == current_data:
                             self.job_list.setCurrentItem(list_item)
 
-                # Auto-scroll: jump to running job, else restore scroll position
+                # Auto-scroll: jump to running job only when following;
+                # otherwise restore the user's previous scroll position.
                 running_item = None
                 for i in range(self.job_list.count()):
                     it = self.job_list.item(i)
                     if it and it.data(256) == qs.current_running_job:
                         running_item = it
                         break
-                if running_item:
+                if running_item and self._job_list_follow:
                     from PySide6.QtWidgets import QAbstractItemView
                     self.job_list.scrollToItem(
                         running_item, QAbstractItemView.ScrollHint.EnsureVisible
