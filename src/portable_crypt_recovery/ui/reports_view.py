@@ -26,9 +26,10 @@ class ReportsView:  # pragma: no cover
 
                 toolbar = QHBoxLayout()
                 self.btn_refresh = QPushButton("Refresh")
+                self.btn_copy_pw = QPushButton("Copy Password")
                 self.btn_export = QPushButton("Export Report Folder...")
                 self.btn_view_folder = QPushButton("Open Report Folder")
-                for btn in [self.btn_refresh, self.btn_export, self.btn_view_folder]:
+                for btn in [self.btn_refresh, self.btn_copy_pw, self.btn_export, self.btn_view_folder]:
                     toolbar.addWidget(btn)
                 toolbar.addStretch()
                 layout.addLayout(toolbar)
@@ -50,6 +51,7 @@ class ReportsView:  # pragma: no cover
                 layout.addWidget(self.lbl_count)
 
                 self.btn_refresh.clicked.connect(self.refresh)
+                self.btn_copy_pw.clicked.connect(self._copy_password)
                 self.btn_view_folder.clicked.connect(self._view_folder)
                 self.btn_export.clicked.connect(self._export)
                 self.report_list.currentRowChanged.connect(self._on_selection_changed)
@@ -116,6 +118,54 @@ class ReportsView:  # pragma: no cover
                     lines.append("=== Hashcat Stats ===")
                     lines.append(stats[:2000])
                 self.detail_pane.setPlainText("\n".join(lines))
+
+            # ------------------------------------------------------------------
+            # Copy password to clipboard (auto-clears after configured timeout)
+            # ------------------------------------------------------------------
+
+            def _copy_password(self) -> None:
+                import json
+                from PySide6.QtWidgets import QMessageBox
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.core.clipboard import copy_with_auto_clear
+
+                ws = self._workspace()
+                row = self.report_list.currentRow()
+                if ws is None or not hasattr(self, "_reports") or row < 0:
+                    QMessageBox.information(self, "Copy Password", "Select a report first.")
+                    return
+                if row >= len(self._reports):
+                    return
+
+                report = self._reports[row]
+                result_json = ws / report.get("report_folder", "") / "recovered-result.json"
+                if not result_json.exists():
+                    QMessageBox.information(
+                        self, "Copy Password",
+                        "No recovered-result.json found for this report.\n"
+                        "The job may not have been cracked."
+                    )
+                    return
+
+                try:
+                    data = json.loads(result_json.read_text(encoding="utf-8"))
+                    pw = data.get("cracked_password", "")
+                except Exception as exc:
+                    QMessageBox.critical(self, "Copy Password", f"Could not read result: {exc}")
+                    return
+
+                if not pw:
+                    QMessageBox.information(self, "Copy Password", "No password found in this report.")
+                    return
+
+                state = get_app_state()
+                seconds = state.clipboard_auto_clear_seconds
+                copy_with_auto_clear(pw, clear_after_seconds=seconds)
+
+                msg = "Password copied to clipboard."
+                if seconds > 0:
+                    msg += f"\nClipboard will be cleared in {seconds} seconds."
+                QMessageBox.information(self, "Password Copied", msg)
 
             # ------------------------------------------------------------------
             # View folder

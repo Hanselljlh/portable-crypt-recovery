@@ -1,0 +1,61 @@
+Portable Crypt Recovery — Safety and Legal Notes
+=================================================
+
+PURPOSE
+-------
+This tool is designed exclusively for authorized recovery of user-owned or
+explicitly authorized VeraCrypt and TrueCrypt volumes. It does not and cannot
+bypass whole-disk encryption, live systems, or physical write-locks.
+
+AUTHORIZED USE ONLY
+-------------------
+You must own the volume or have explicit written authorization from the owner
+before attempting any recovery operation. Unauthorized access to encrypted
+volumes may violate computer fraud and abuse laws in your jurisdiction.
+
+NO ORIGINAL VOLUME MODIFICATION
+--------------------------------
+PCR opens volumes read-only to extract headers. It never writes to or modifies
+original volume files. All recovery work is done on normalized 512-byte header
+copies stored inside your workspace folder.
+
+SENSITIVE DATA HANDLING
+-----------------------
+Recovered passwords are written only to the workspace you configured. They are
+never sent to any network, logged to application logs, or stored in temp folders.
+Keep your workspace folder secure (encrypted drive or access-controlled folder).
+
+Specifically:
+  - recovered-result.txt / recovered-result.json — contain the plaintext password
+  - normalized-header.bin — a copy of the volume header (512 bytes)
+  - keyfiles in report packages — copies of any keyfiles used
+
+Delete or securely wipe these files when you no longer need them.
+
+CLIPBOARD AUTO-CLEAR
+--------------------
+When you copy a recovered password, PCR automatically clears the clipboard after
+the configured timeout (default 60 seconds). Do not paste into untrusted applications.
+
+HASHCAT USAGE
+-------------
+PCR drives Hashcat via argument arrays. No shell strings are used. Hashcat itself
+is not bundled; you must supply your own copy from https://hashcat.net/hashcat/
+
+Verify Hashcat's integrity using the official checksums before use.
+
+WORKSPACE LOCK FILE
+-------------------
+A lock file (queue/runner-lock.json) prevents two instances from running the
+same queue simultaneously. If the app crashes with the queue running, you may
+be prompted to remove this stale lock on next startup. Only do so if you are
+certain no other instance is running against this workspace.
+
+DISCLAIMERS
+-----------
+This software is provided "as is" without warranty of any kind. The authors
+accept no liability for data loss, failed recovery, or any other damages.
+Recovery is not guaranteed even when all parameters are correct.
+
+VeraCrypt and TrueCrypt are independent projects. PCR is not affiliated with,
+endorsed by, or supported by the VeraCrypt or TrueCrypt teams.

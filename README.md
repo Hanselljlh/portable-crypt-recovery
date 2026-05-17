@@ -1,71 +1,90 @@
-# Portable VeraCrypt/TrueCrypt Recovery GUI
+# Portable Crypt Recovery (PCR)
 
-A local, portable Windows and Linux GUI for authorized VeraCrypt and TrueCrypt volume recovery using Hashcat.
+A local, portable Windows and Linux GUI for authorized VeraCrypt and TrueCrypt
+volume recovery using Hashcat. All data stays on your machine — no cloud,
+no telemetry.
 
-## Project status
+> **Authorized use only.** You must own the volume or have explicit written
+> authorization before attempting recovery. See [docs/safety-notes.txt](docs/safety-notes.txt).
 
-This repository is in the initial scaffold stage. The first implementation focuses on the app shell, workspace foundation, JSON-backed state, Hashcat setup plumbing, and testable backend services.
+## Quick start (portable release)
 
-The app is not a general Hashcat GUI. It is a focused recovery workflow for user-owned or authorized VeraCrypt and TrueCrypt volumes.
+1. Download the latest release zip/tarball from the [Releases](../../releases) page.
+2. Extract to any folder.
+3. Place `hashcat.exe` (Windows) or `hashcat` (Linux) and its support files into
+   `tools/hashcat/`.
+4. Run `PCR.exe` (Windows) or `./PCR` (Linux).
+5. **Settings → Hashcat Setup** — browse to `tools/hashcat/hashcat.exe` and click
+   **Verify Hashcat**.
+6. **Settings → Workspace** — open the pre-created `workspaces/default/` folder
+   or create a new workspace.
+7. **Targets** — add your VeraCrypt/TrueCrypt volume and extract its header.
+8. **Jobs** — create a draft, select a wordlist, and expand to queue jobs.
+9. **Queue** — click **Start Queue** and wait for results.
+10. **Reports** — view cracked results and copy the recovered password.
 
-## Core rules
+## User guide
 
-- Local desktop GUI only.
-- Hashcat is the required backend.
-- The app does not crack passwords itself.
-- Original VeraCrypt and TrueCrypt volumes are opened read-only and are never modified.
-- Hashcat jobs must use workspace-local extracted or normalized headers, not original full volumes.
-- App-created sensitive files and forensic-trail files stay inside the selected workspace by default.
-- System temp folders must not be used for recovery project data.
-- Commands are stored and executed internally as argument arrays, not unsafe raw shell strings.
-- Command strings are only for preview or export.
+| Page | Description |
+|------|-------------|
+| [Getting Started](docs/user-guide/getting-started.md) | Installation, first run, workspace setup |
+| [Hashcat Setup](docs/user-guide/hashcat-setup.md) | Configuring and verifying Hashcat |
+| [Adding Targets](docs/user-guide/adding-targets.md) | Adding volumes and extracting headers |
+| [Creating Jobs](docs/user-guide/creating-jobs.md) | Draft parameters, expansion, wordlists |
+| [Running the Queue](docs/user-guide/running-queue.md) | Start, pause, resume, skip |
+| [Reports](docs/user-guide/reports.md) | Viewing results, copying passwords, exporting |
+| [Troubleshooting](docs/user-guide/troubleshooting.md) | Common issues and fixes |
+| [Safety Notes](docs/safety-notes.txt) | Legal and security guidance |
+
+## Core design rules
+
+- Local desktop GUI only — no network calls, no telemetry.
+- Hashcat is the required backend. PCR does not implement cracking itself.
+- Original volumes are opened **read-only** and are never modified.
+- Hashcat jobs use workspace-local 512-byte normalized header copies.
+- All sensitive files stay inside the workspace folder you configure.
+- System temp folders are never used for recovery data.
+- Commands are stored and executed as argument arrays, never raw shell strings.
 
 ## Version 1 scope
 
-Version 1 targets:
-
-- VeraCrypt and TrueCrypt file containers
-- disk or drive image files
-- already extracted header files
-- workspace-local normalized 512-byte job headers
+- VeraCrypt and TrueCrypt file containers, disk images, and pre-extracted headers
 - Hashcat setup and verification
-- mode, PIM, keyfile, and password builders
-- one-job-at-a-time queue runner
-- cracked-result reports
+- Hash mode, PIM, keyfile, and dictionary password builders
+- One-job-at-a-time queue runner with pause/resume/skip
+- Cracked-result report packages with clipboard auto-clear
 
-Version 1 does not support raw physical disk, drive, or partition access. Those options are future placeholders.
+Version 1 does not support raw physical disk or partition access.
 
 ## Development setup
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Linux/macOS
+# .\.venv\Scripts\Activate.ps1    # Windows PowerShell
 python -m pip install -e .[dev]
 python -m pytest
 python -m portable_crypt_recovery
 ```
 
-On Windows PowerShell:
+## Building a portable release
 
+**Windows:**
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .[dev]
-python -m pytest
-python -m portable_crypt_recovery
+.\packaging\windows\build.ps1 -Version "0.1.0"
+# Output: dist\PCR-windows-portable-0.1.0.zip
+```
+
+**Linux:**
+```bash
+bash packaging/linux/build.sh 0.1.0
+# Output: dist/PCR-linux-portable-0.1.0.tar.gz
 ```
 
 ## Hashcat
 
-Hashcat is not bundled by default. Place it in:
-
-```text
-PCR/tools/hashcat/
-```
-
-or browse to an existing Hashcat executable from Settings once the GUI is running.
-
-Version 1 should not auto-download Hashcat.
+Hashcat is not bundled. Download it from <https://hashcat.net/hashcat/> and
+verify the official checksums before use.
 
 ## License
 
