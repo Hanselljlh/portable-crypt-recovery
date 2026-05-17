@@ -6,7 +6,7 @@
 #         dist\PCR-windows-portable.zip (release archive)
 
 param(
-    [string]$Version = "0.1.0",
+    [string]$Version = "0.1.1",
     [string]$PyExePath = "",   # override if python.exe is not on PATH
     [switch]$SkipZip
 )

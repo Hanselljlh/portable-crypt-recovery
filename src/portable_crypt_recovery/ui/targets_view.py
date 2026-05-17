@@ -313,11 +313,26 @@ class TargetsView:  # pragma: no cover
                     QMessageBox.warning(self, "Remove Target", "No target selected.")
                     return
 
-                target = item.data(256)
-                if target is None:
+                tid = item.data(256)  # stored as target_id string
+                if not tid:
                     return
 
-                display = target.get("display_name", target.get("target_id", "?"))
+                # Look up the display name from targets.json for the confirmation prompt
+                state = get_app_state()
+                if not state.is_workspace_open():
+                    return
+
+                targets_file = state.workspace_root / "targets" / "targets.json"
+                display = tid
+                try:
+                    data = json.loads(targets_file.read_text(encoding="utf-8"))
+                    for t in data.get("targets", []):
+                        if t.get("target_id") == tid:
+                            display = t.get("display_name", tid)
+                            break
+                except Exception:
+                    data = {"schema_version": 1, "targets": []}
+
                 reply = QMessageBox.question(
                     self,
                     "Remove Target",
@@ -331,14 +346,7 @@ class TargetsView:  # pragma: no cover
                 if reply != QMessageBox.StandardButton.Yes:
                     return
 
-                state = get_app_state()
-                if not state.is_workspace_open():
-                    return
-
-                targets_file = state.workspace_root / "targets" / "targets.json"
                 try:
-                    data = json.loads(targets_file.read_text(encoding="utf-8"))
-                    tid = target.get("target_id", "")
                     data["targets"] = [
                         t for t in data.get("targets", [])
                         if t.get("target_id") != tid
@@ -349,6 +357,6 @@ class TargetsView:  # pragma: no cover
                     QMessageBox.critical(self, "Remove Target", f"Failed to remove target:\n{exc}")
                     return
 
-                self._refresh_targets()
+                self._refresh_list()
 
         return _TargetsView()
