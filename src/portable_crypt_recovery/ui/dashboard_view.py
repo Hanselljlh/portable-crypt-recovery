@@ -1,0 +1,83 @@
+"""Dashboard view — shows workspace overview and status."""
+
+from __future__ import annotations
+
+
+class DashboardView:  # pragma: no cover
+    """Dashboard showing workspace name, Hashcat status, counts, and recent activity."""
+
+    def __new__(cls, app_state=None):
+        from PySide6.QtWidgets import (
+            QGroupBox,
+            QHBoxLayout,
+            QLabel,
+            QListWidget,
+            QPushButton,
+            QSizePolicy,
+            QVBoxLayout,
+            QWidget,
+        )
+
+        class _DashboardView(QWidget):
+            def __init__(self, app_state=None) -> None:
+                super().__init__()
+                self.app_state = app_state
+                layout = QVBoxLayout(self)
+
+                # Status row
+                status_group = QGroupBox("Workspace")
+                status_layout = QVBoxLayout(status_group)
+                self.lbl_workspace = QLabel("No workspace open")
+                self.lbl_hashcat = QLabel("Hashcat: Not configured")
+                status_layout.addWidget(self.lbl_workspace)
+                status_layout.addWidget(self.lbl_hashcat)
+                layout.addWidget(status_group)
+
+                # Counts row
+                counts_group = QGroupBox("Status")
+                counts_layout = QHBoxLayout(counts_group)
+                self.lbl_targets = QLabel("Targets: 0")
+                self.lbl_headers = QLabel("Headers: 0")
+                self.lbl_jobs = QLabel("Jobs: 0")
+                counts_layout.addWidget(self.lbl_targets)
+                counts_layout.addWidget(self.lbl_headers)
+                counts_layout.addWidget(self.lbl_jobs)
+                layout.addWidget(counts_group)
+
+                # Hashcat warning button
+                self.btn_setup_hashcat = QPushButton("Open Settings → Hashcat Setup")
+                self.btn_setup_hashcat.setVisible(True)
+                layout.addWidget(self.btn_setup_hashcat)
+
+                # Recent activity
+                activity_group = QGroupBox("Recent Activity")
+                activity_layout = QVBoxLayout(activity_group)
+                self.activity_list = QListWidget()
+                activity_layout.addWidget(self.activity_list)
+                layout.addWidget(activity_group, 1)
+
+                if app_state:
+                    self.refresh(app_state)
+
+            def refresh(self, app_state) -> None:
+                if app_state.workspace_root:
+                    self.lbl_workspace.setText(
+                        f"Workspace: {app_state.workspace_name} ({app_state.workspace_root})"
+                    )
+                else:
+                    self.lbl_workspace.setText("No workspace open")
+
+                if app_state.is_hashcat_ready():
+                    self.lbl_hashcat.setText(
+                        f"Hashcat: Ready ({app_state.hashcat_setup.version_string})"
+                    )
+                    self.btn_setup_hashcat.setVisible(False)
+                else:
+                    self.lbl_hashcat.setText("Hashcat: Not configured — see Settings")
+                    self.btn_setup_hashcat.setVisible(True)
+
+                self.lbl_targets.setText(f"Targets: {app_state.target_count}")
+                self.lbl_headers.setText(f"Headers: {app_state.header_count}")
+                self.lbl_jobs.setText(f"Jobs: {app_state.job_count}")
+
+        return _DashboardView(app_state)
