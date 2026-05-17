@@ -80,6 +80,7 @@ class QueuedJob:
     hashcat_mode: int = 0
     pim_value: int | None = None
     pim_mode: str = "default"  # "default" | "custom"
+    wordlist_path: str = ""  # abs path or workspace-relative; empty = no wordlist arg
     created_timestamp: str = ""
     updated_timestamp: str = ""
     notes: str = ""
@@ -103,6 +104,7 @@ class QueuedJob:
             "hashcat_mode": self.hashcat_mode,
             "pim_value": self.pim_value,
             "pim_mode": self.pim_mode,
+            "wordlist_path": self.wordlist_path,
             "created_timestamp": self.created_timestamp,
             "updated_timestamp": self.updated_timestamp,
             "notes": self.notes,
@@ -127,6 +129,7 @@ class QueuedJob:
             hashcat_mode=data.get("hashcat_mode", 0),
             pim_value=data.get("pim_value"),
             pim_mode=data.get("pim_mode", "default"),
+            wordlist_path=data.get("wordlist_path", ""),
             created_timestamp=data.get("created_timestamp", ""),
             updated_timestamp=data.get("updated_timestamp", ""),
             notes=data.get("notes", ""),

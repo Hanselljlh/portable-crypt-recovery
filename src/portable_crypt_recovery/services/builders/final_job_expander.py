@@ -96,6 +96,7 @@ def expand_jobs(
                     hashcat_mode=mode_entry.mode,
                     pim_value=pim_value,
                     pim_mode=pim_mode,
+                    wordlist_path=password_source.workspace_relative_path or "",
                     created_timestamp=now,
                     updated_timestamp=now,
                 )

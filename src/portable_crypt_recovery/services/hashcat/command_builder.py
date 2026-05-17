@@ -31,16 +31,15 @@ def build_command(
 
     args: list[str] = [str(hashcat_executable.resolve())]
 
+    # Attack mode: always dictionary (-a 0) for PCR jobs
+    args += ["-a", "0"]
+
     # Hash mode
     args += ["-m", str(job.hashcat_mode)]
 
-    # Hash input (normalized 512-byte header or derived input)
+    # Hash input: 512-byte normalized header
     if not job.outfile_path:
         raise CommandBuilderError("Job has no outfile_path set.")
-    # The header input comes from jobs/command-arrays or generated/hash-inputs
-    # For basic builds, we expect the header path embedded in command_array already
-    # This builder constructs a *new* command array from the job fields
-    # The header_path is workspace-relative; we resolve it here
     from portable_crypt_recovery.services.headers.metadata import load_header_metadata
     try:
         header_meta = load_header_metadata(workspace_root, job.header_id)
@@ -81,7 +80,6 @@ def build_command(
     # Keyfile handling — workspace-local keyfiles only
     if job.keyfile_set_id:
         from portable_crypt_recovery.models.keyfile_set import KeyfileSet
-        # Attempt to load keyfile set from workspace
         kf_set_path = workspace_root / "generated" / "keyfile-lists" / f"{job.keyfile_set_id}.json"
         if kf_set_path.exists():
             import json
@@ -91,6 +89,19 @@ def build_command(
             for entry in kf_set.entries:
                 kf_abs = safe_join_workspace(workspace_root, entry.normalized_workspace_path)
                 args += ["--keyfile", str(kf_abs)]
+
+    # Wordlist (dictionary) — must come last, positional after the hash file
+    if not job.wordlist_path:
+        raise CommandBuilderError("Job has no wordlist_path set. Expand the draft again.")
+    wordlist_path_str = job.wordlist_path
+    # Resolve workspace-relative paths; absolute paths pass through unchanged
+    from pathlib import Path as _Path
+    wl = _Path(wordlist_path_str)
+    if not wl.is_absolute():
+        wl = safe_join_workspace(workspace_root, wordlist_path_str)
+    if not wl.exists():
+        raise CommandBuilderError(f"Wordlist not found: {wl}")
+    args.append(str(wl))
 
     return args
 

@@ -26,8 +26,11 @@ def _make_workspace(tmp_path: Path) -> Path:
         "hashcat/output",
         "hashcat/logs",
         "hashcat/restore",
+        "generated/wordlists",
     ]:
         (ws / folder).mkdir(parents=True)
+    # Create a minimal wordlist so command_builder can validate it exists
+    (ws / "generated" / "wordlists" / "test_wordlist.txt").write_text("password123\n")
     return ws
 
 
@@ -69,6 +72,7 @@ def _make_job(header: Header, ws: Path) -> QueuedJob:
         hashcat_mode=29411,
         pim_value=None,
         pim_mode="default",
+        wordlist_path="generated/wordlists/test_wordlist.txt",
         created_timestamp=utc_now_iso(),
         updated_timestamp=utc_now_iso(),
     )
@@ -171,6 +175,44 @@ def test_command_pim_custom(tmp_path):
     assert "--veracrypt-pim-stop" in args
     pim_idx = args.index("--veracrypt-pim-start")
     assert args[pim_idx + 1] == "500"
+
+
+def test_command_includes_attack_mode_and_wordlist(tmp_path):
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+
+    if os.name == "nt":
+        fake_exe = tmp_path / "hashcat.cmd"
+        fake_exe.write_text("@echo off\nexit /b 0\n")
+    else:
+        fake_exe = tmp_path / "hashcat"
+        fake_exe.write_text("#!/bin/sh\nexit 0\n")
+        fake_exe.chmod(0o755)
+
+    args = build_command(job, fake_exe, ws)
+    assert "-a" in args
+    assert args[args.index("-a") + 1] == "0"
+    # Wordlist path should be the last argument
+    assert args[-1].endswith("test_wordlist.txt")
+
+
+def test_command_fails_missing_wordlist(tmp_path):
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.wordlist_path = "generated/wordlists/nonexistent.txt"
+
+    if os.name == "nt":
+        fake_exe = tmp_path / "hashcat.cmd"
+        fake_exe.write_text("@echo off\nexit /b 0\n")
+    else:
+        fake_exe = tmp_path / "hashcat"
+        fake_exe.write_text("#!/bin/sh\nexit 0\n")
+        fake_exe.chmod(0o755)
+
+    with pytest.raises(CommandBuilderError, match="Wordlist not found"):
+        build_command(job, fake_exe, ws)
 
 
 def test_command_fails_missing_executable(tmp_path):
