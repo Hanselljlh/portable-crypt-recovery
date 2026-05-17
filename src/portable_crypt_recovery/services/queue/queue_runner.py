@@ -36,11 +36,13 @@ class QueueRunner:
         queue_state: QueueState,
         hashcat_executable: Path,
         on_status_update: Callable[[QueueState], None] | None = None,
+        behavior_after_crack: str = "continue_other_uncracked_targets",
     ) -> None:
         self._workspace_root = workspace_root
         self._queue_state = queue_state
         self._hashcat_exe = hashcat_executable
         self._on_status_update = on_status_update
+        self._behavior_after_crack = behavior_after_crack
         self._current_runner: HashcatProcessRunner | None = None
         self._stop_after_current = False
         self._stop_discard = False
@@ -100,6 +102,14 @@ class QueueRunner:
                     continue
                 self._run_job(job)
                 if self._stop_after_current:
+                    break
+                # Stop entire queue when any job cracks (if configured)
+                job_after = self._queue_state.jobs.get(job_id)
+                if (
+                    job_after is not None
+                    and job_after.status == "cracked"
+                    and self._behavior_after_crack == "stop_entire_queue"
+                ):
                     break
         finally:
             self._queue_state.status = "stopped"

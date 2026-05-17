@@ -47,6 +47,7 @@ class DashboardView:  # pragma: no cover
                 # Hashcat warning button
                 self.btn_setup_hashcat = QPushButton("Open Settings → Hashcat Setup")
                 self.btn_setup_hashcat.setVisible(True)
+                self.btn_setup_hashcat.clicked.connect(self._go_to_settings)
                 layout.addWidget(self.btn_setup_hashcat)
 
                 # Recent activity
@@ -58,11 +59,18 @@ class DashboardView:  # pragma: no cover
 
                 # Auto-refresh every 5 seconds so counts stay current
                 self._timer = QTimer(self)
+
                 self._timer.setInterval(5000)
                 self._timer.timeout.connect(self._auto_refresh)
                 self._timer.start()
 
                 self._auto_refresh()
+
+            def _go_to_settings(self) -> None:
+                # Walk up to the QMainWindow and switch nav to Settings (index 6)
+                win = self.window()
+                if hasattr(win, "nav"):
+                    win.nav.setCurrentRow(6)
 
             def _auto_refresh(self) -> None:
                 from portable_crypt_recovery.app.app_state import get_app_state

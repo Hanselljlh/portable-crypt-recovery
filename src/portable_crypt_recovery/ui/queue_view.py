@@ -158,6 +158,7 @@ class QueueView:  # pragma: no cover
                     queue_state=qs,
                     hashcat_executable=hashcat_exe,
                     on_status_update=lambda _: None,
+                    behavior_after_crack=state.queue_behavior_after_crack,
                 )
                 if not self._runner.start():
                     self._runner = None
