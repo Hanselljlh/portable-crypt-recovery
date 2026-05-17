@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This step defines the portable folder layout and workspace rules for the Portable Hashcat GUI project.
+This step defines the portable folder layout and workspace rules for the Portable VeraCrypt/TrueCrypt Recovery GUI project.
 
 The app should be portable by default and should keep all app-created project data inside one chosen workspace folder unless the user deliberately chooses an external location.
 
@@ -203,9 +203,9 @@ The cleanup manifest should not store passwords or cracked secrets directly.
 Suggested portable app folder layout:
 
 ```text
-PortableHashcatGUI/
+PCR/
   app/
-    PortableHashcatGUI executable or launcher
+    PCR executable or launcher
     app files
     Python runtime if bundled later
     GUI libraries if bundled later
