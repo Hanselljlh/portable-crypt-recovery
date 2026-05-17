@@ -83,6 +83,28 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 # Help menu
                 self._build_help_menu()
 
+                # Navigate to Settings on first launch if no workspace loaded
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(150, self._check_first_run)
+
+            def _check_first_run(self) -> None:
+                from PySide6.QtWidgets import QMessageBox  # noqa: PLC0415
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                if not get_app_state().is_workspace_open():
+                    self.nav.setCurrentRow(SCREEN_NAMES.index("Settings"))
+                    QMessageBox.information(
+                        self,
+                        "Welcome — Setup Required",
+                        "No workspace is loaded.\n\n"
+                        "To get started:\n"
+                        "  1. Under Workspace → click Open Workspace and select\n"
+                        "     the workspaces\\default\\ folder in this app directory.\n\n"
+                        "  2. Under Hashcat Setup → browse to hashcat.exe and\n"
+                        "     click Verify (or use 'Use Portable Tools Folder'\n"
+                        "     if hashcat is already in tools\\hashcat\\).",
+                    )
+
             def _build_help_menu(self) -> None:
                 menubar = self.menuBar()
                 help_menu = menubar.addMenu("Help")

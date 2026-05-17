@@ -134,6 +134,19 @@ class QueueView:  # pragma: no cover
                     QMessageBox.information(self, "Nothing to Run", "No pending jobs in queue.")
                     return
 
+                # Show busy indicator while building commands and starting the runner
+                from PySide6.QtCore import Qt
+                from PySide6.QtWidgets import QApplication, QProgressDialog
+                progress = QProgressDialog(
+                    f"Preparing {len(pending)} job(s)…", None, 0, 0, self
+                )
+                progress.setWindowTitle("Starting Queue")
+                progress.setWindowModality(Qt.WindowModality.WindowModal)
+                progress.setMinimumDuration(0)
+                progress.setValue(0)
+                progress.show()
+                QApplication.processEvents()
+
                 # Build command arrays for all pending jobs
                 device_ids = state.hashcat_setup.selected_device_ids or None
                 errors: list[str] = []
@@ -148,6 +161,7 @@ class QueueView:  # pragma: no cover
                         errors.append(f"{job.job_id[:8]}: {exc}")
 
                 if errors:
+                    progress.close()
                     QMessageBox.warning(
                         self, "Command Build Errors",
                         f"{len(errors)} job(s) could not build a command:\n" + "\n".join(errors[:5])
@@ -164,6 +178,7 @@ class QueueView:  # pragma: no cover
                     behavior_after_crack=state.queue_behavior_after_crack,
                 )
                 if not self._runner.start():
+                    progress.close()
                     self._runner = None
                     QMessageBox.warning(
                         self, "Queue Locked",
@@ -172,6 +187,7 @@ class QueueView:  # pragma: no cover
                     )
                     return
 
+                progress.close()
                 self._timer.start()
                 self._update_button_states("running")
                 self.lbl_status.setText("Queue running")

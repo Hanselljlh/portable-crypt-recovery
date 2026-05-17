@@ -98,7 +98,8 @@ class JobsView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _expand_to_queue(self) -> None:
-                from PySide6.QtWidgets import QMessageBox
+                from PySide6.QtCore import Qt
+                from PySide6.QtWidgets import QApplication, QMessageBox, QProgressDialog
 
                 from portable_crypt_recovery.app.app_state import get_app_state
 
@@ -112,12 +113,22 @@ class JobsView:  # pragma: no cover
                 if not draft:
                     return
 
+                progress = QProgressDialog("Building queue jobs…", None, 0, 0, self)
+                progress.setWindowTitle("Please Wait")
+                progress.setWindowModality(Qt.WindowModality.WindowModal)
+                progress.setMinimumDuration(0)
+                progress.setValue(0)
+                progress.show()
+                QApplication.processEvents()
+
                 try:
                     count = self._do_expand(draft, state)
                 except Exception as exc:
+                    progress.close()
                     QMessageBox.critical(self, "Expansion Failed", str(exc))
                     return
 
+                progress.close()
                 state.job_count += count
                 self._refresh_list()
                 QMessageBox.information(

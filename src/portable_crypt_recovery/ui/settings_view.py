@@ -257,8 +257,8 @@ class SettingsView:  # pragma: no cover
                 found = find_in_portable_tools(app_root_from_cwd())
                 if found:
                     self.txt_hc_path.setText(str(found))
-                    self.lbl_hc_status.setText("Path set — click Verify to confirm.")
-                    self.lbl_hc_status.setStyleSheet("font-weight: bold;")
+                    # File is confirmed present — verify immediately
+                    self._verify_hashcat()
                 else:
                     from PySide6.QtWidgets import QMessageBox
                     QMessageBox.information(
