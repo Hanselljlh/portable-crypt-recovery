@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This step defines reporting for the Portable Hashcat GUI project.
+This step defines reporting for the Portable VeraCrypt/TrueCrypt Recovery GUI project.
 
 Reports should give the user clear, usable records of cracked results and the exact job details that produced them.
 
