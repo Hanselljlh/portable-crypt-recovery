@@ -12,6 +12,7 @@ SCREEN_NAMES = (
     "Logs",
     "Reports",
     "Settings",
+    "Cleanup",
 )
 
 
@@ -36,6 +37,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
             QWidget,
         )
 
+        from portable_crypt_recovery.ui.cleanup_view import CleanupView
         from portable_crypt_recovery.ui.dashboard_view import DashboardView
         from portable_crypt_recovery.ui.jobs_view import JobsView
         from portable_crypt_recovery.ui.logs_view import LogsView
@@ -66,6 +68,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                     LogsView(),
                     ReportsView(),
                     SettingsView(),
+                    CleanupView(),
                 ]
 
                 for name, view in zip(SCREEN_NAMES, views):
@@ -145,6 +148,9 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                             subprocess.Popen(["xdg-open", str(logs_dir)])
 
             def _export_diagnostic(self) -> None:
+                import os
+                import sys
+                import subprocess
                 from PySide6.QtWidgets import QMessageBox
                 from portable_crypt_recovery.app.app_state import get_app_state
                 state = get_app_state()
@@ -154,12 +160,25 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 from portable_crypt_recovery.services.diagnostics.diagnostic_bundle import (
                     export_diagnostic_bundle,
                 )
-                bundle = export_diagnostic_bundle(state.workspace_root, state.hashcat_setup.version_string)
-                QMessageBox.information(
+                bundle = export_diagnostic_bundle(
+                    state.workspace_root,
+                    state.hashcat_setup.version_string or None,
+                )
+                abs_path = state.workspace_root / bundle.bundle_path
+                reply = QMessageBox.information(
                     self,
                     "Diagnostic Bundle Exported",
-                    f"Saved to: {bundle.bundle_path}",
+                    f"Saved to:\n{abs_path}\n\nOpen the containing folder?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
                 )
+                if reply == QMessageBox.StandardButton.Yes:
+                    folder = abs_path.parent
+                    if folder.exists():
+                        if sys.platform == "win32":
+                            os.startfile(str(folder))
+                        else:
+                            subprocess.Popen(["xdg-open", str(folder)])
 
             def _open_github_issues(self) -> None:
                 QDesktopServices.openUrl(
