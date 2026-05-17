@@ -24,14 +24,20 @@ class JobsView:  # pragma: no cover
                 toolbar = QHBoxLayout()
                 self.btn_new = QPushButton("New Job Draft...")
                 self.btn_expand = QPushButton("Send to Queue")
-                self.btn_delete = QPushButton("Delete Draft")
+                self.btn_delete = QPushButton("Delete Selected")
+                self.btn_delete_all = QPushButton("Delete All")
                 toolbar.addWidget(self.btn_new)
                 toolbar.addWidget(self.btn_expand)
                 toolbar.addWidget(self.btn_delete)
+                toolbar.addWidget(self.btn_delete_all)
                 toolbar.addStretch()
                 layout.addLayout(toolbar)
 
+                from PySide6.QtWidgets import QAbstractItemView
                 self.job_list = QListWidget()
+                self.job_list.setSelectionMode(
+                    QAbstractItemView.SelectionMode.ExtendedSelection
+                )
                 layout.addWidget(self.job_list, 1)
 
                 info = QLabel(
@@ -44,6 +50,7 @@ class JobsView:  # pragma: no cover
                 self.btn_new.clicked.connect(self._new_draft)
                 self.btn_expand.clicked.connect(self._expand_to_queue)
                 self.btn_delete.clicked.connect(self._delete_draft)
+                self.btn_delete_all.clicked.connect(self._delete_all_drafts)
 
                 self._refresh_list()
 
@@ -103,17 +110,16 @@ class JobsView:  # pragma: no cover
 
                 from portable_crypt_recovery.app.app_state import get_app_state
 
-                item = self.job_list.currentItem()
-                if item is None:
-                    QMessageBox.information(self, "Expand", "Select a draft first.")
+                selected = self.job_list.selectedItems()
+                if not selected:
+                    QMessageBox.information(self, "Send to Queue", "Select a draft first.")
                     return
 
                 state = get_app_state()
-                draft = item.data(256)
-                if not draft:
-                    return
 
-                progress = QProgressDialog("Building queue jobs…", None, 0, 0, self)
+                progress = QProgressDialog(
+                    f"Building queue jobs for {len(selected)} draft(s)…", None, 0, 0, self
+                )
                 progress.setWindowTitle("Please Wait")
                 progress.setWindowModality(Qt.WindowModality.WindowModal)
                 progress.setMinimumDuration(0)
@@ -121,25 +127,40 @@ class JobsView:  # pragma: no cover
                 progress.show()
                 QApplication.processEvents()
 
-                try:
-                    count = self._do_expand(draft, state)
-                except Exception as exc:
-                    progress.close()
-                    QMessageBox.critical(self, "Expansion Failed", str(exc))
-                    return
+                total_count = 0
+                errors: list[str] = []
+                sent_drafts: list[tuple[dict, int]] = []
+                for item in selected:
+                    draft = item.data(256)
+                    if not draft:
+                        continue
+                    try:
+                        count = self._do_expand(draft, state)
+                        total_count += count
+                        sent_drafts.append((draft, count))
+                    except Exception as exc:
+                        errors.append(f"{draft.get('label', '?')}: {exc}")
 
                 progress.close()
-                state.job_count += count
 
-                # Mark the draft as sent so the list shows it was queued
-                self._mark_draft_sent(draft, count, state)
+                if errors:
+                    QMessageBox.warning(
+                        self, "Some Expansions Failed",
+                        "\n".join(errors[:5])
+                    )
+
+                state.job_count += total_count
+                for draft, count in sent_drafts:
+                    self._mark_draft_sent(draft, count, state)
                 self._refresh_list()
-                QMessageBox.information(
-                    self,
-                    "Jobs Added to Queue",
-                    f"{count} job(s) sent to the queue.\n\n"
-                    "Switch to the Queue tab to see them.",
-                )
+
+                if total_count:
+                    QMessageBox.information(
+                        self,
+                        "Jobs Added to Queue",
+                        f"{total_count} job(s) from {len(sent_drafts)} draft(s) sent to the queue.\n\n"
+                        "Switch to the Queue tab to see them.",
+                    )
 
             def _do_expand(self, draft: dict, state) -> int:
                 import json
@@ -262,35 +283,82 @@ class JobsView:  # pragma: no cover
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
 
-                item = self.job_list.currentItem()
-                if item is None:
+                selected = self.job_list.selectedItems()
+                if not selected:
                     QMessageBox.warning(self, "Delete", "Select a draft first.")
                     return
 
-                draft = item.data(256)
-                if not draft:
+                drafts = [it.data(256) for it in selected if it.data(256)]
+                if not drafts:
                     return
 
+                names_str = "\n".join(
+                    f"  • {d.get('label', d.get('draft_id', '?'))}" for d in drafts
+                )
                 reply = QMessageBox.question(
                     self,
-                    "Delete Draft",
-                    f"Delete draft '{draft.get('label', '')}'?",
+                    "Delete Draft(s)",
+                    f"Delete {len(drafts)} draft(s)?\n{names_str}",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
                 )
-                from PySide6.QtWidgets import QMessageBox as MB
-                if reply != MB.StandardButton.Yes:
+                if reply != QMessageBox.StandardButton.Yes:
                     return
 
+                ids_to_remove = {d.get("draft_id") for d in drafts}
                 state = get_app_state()
                 drafts_file = state.workspace_root / "jobs" / "drafts.json"
                 try:
                     existing = json.loads(drafts_file.read_text(encoding="utf-8"))
                     existing["drafts"] = [
                         d for d in existing["drafts"]
-                        if d.get("draft_id") != draft.get("draft_id")
+                        if d.get("draft_id") not in ids_to_remove
                     ]
                     atomic_write_json(drafts_file, existing)
                 except Exception:
                     pass
+                self._refresh_list()
+
+            def _delete_all_drafts(self) -> None:
+                import json
+
+                from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
+                state = get_app_state()
+                if not state.is_workspace_open():
+                    return
+
+                drafts_file = state.workspace_root / "jobs" / "drafts.json"
+                try:
+                    data = json.loads(drafts_file.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {"schema_version": 1, "drafts": []}
+
+                count = len(data.get("drafts", []))
+                if count == 0:
+                    QMessageBox.information(self, "Delete All", "No drafts to delete.")
+                    return
+
+                reply = QMessageBox.question(
+                    self,
+                    "Delete All Drafts",
+                    f"Delete all {count} draft(s)?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
+                try:
+                    data["drafts"] = []
+                    atomic_write_json(drafts_file, data)
+                except Exception as exc:
+                    QMessageBox.critical(self, "Delete All", f"Failed:\n{exc}")
+                    return
+
                 self._refresh_list()
 
             # ------------------------------------------------------------------
@@ -321,9 +389,15 @@ class JobsView:  # pragma: no cover
                     for d in data.get("drafts", []):
                         sent = d.get("sent", False)
                         sent_count = d.get("sent_job_count", 0)
+                        est_count = d.get("estimated_job_count", 0)
 
                         # --- Line 1: sent badge + name + family ---
-                        badge = f"✓ {sent_count} jobs sent  " if sent else "○ not sent  "
+                        if sent:
+                            badge = f"✓ {sent_count} jobs sent  "
+                        elif est_count:
+                            badge = f"○ ~{est_count} jobs  "
+                        else:
+                            badge = "○ not sent  "
                         family = d.get("family", "unknown")
                         name = d.get("label", d.get("draft_id", "?"))
                         ctype = d.get("candidate_type", "normal_volume_header")
@@ -602,6 +676,40 @@ class _NewJobDraftDialog:  # pragma: no cover
                 target_name = tgt.get("display_name", "?")
                 candidate_type = header_obj.candidate_type if hasattr(header_obj, "candidate_type") else "normal_volume_header"
 
+                # Estimate job count (mode × pim × kf combos)
+                estimated_job_count = 0
+                try:
+                    from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                        build_mode_set,
+                    )
+                    from portable_crypt_recovery.services.builders.pim_builder import (
+                        build_default_pim_set,
+                        build_pim_set,
+                    )
+                    mode_set = build_mode_set(
+                        family=tgt.get("container_family", "unknown"),
+                        candidate_type=candidate_type,
+                        target_id=tgt["target_id"],
+                        header_id=header_obj.header_id,
+                        include_legacy=not self.rad_current.isChecked(),
+                    )
+                    mode_count = len(mode_set.entries)
+                    if self.rad_pim_custom.isChecked():
+                        pim_set = build_pim_set(
+                            self.txt_pim.text().strip(),
+                            workspace_root=self._workspace_root,
+                            force=False,
+                        )
+                        pim_count = max(len(pim_set.entries), 1)
+                    else:
+                        pim_set = build_default_pim_set()
+                        pim_count = max(len(pim_set.entries), 1)
+                    n_kf = len(keyfile_paths)
+                    kf_count = max(1, (2 ** n_kf) - 1) if n_kf > 0 else 1
+                    estimated_job_count = mode_count * pim_count * kf_count
+                except Exception:
+                    estimated_job_count = 0
+
                 self.draft = {
                     "draft_id": new_id("draft"),
                     "label": f"{target_name} — {candidate_type}",
@@ -616,6 +724,7 @@ class _NewJobDraftDialog:  # pragma: no cover
                     "password_manual_text": self.txt_passwords.toPlainText(),
                     "password_wordlist_path": self.txt_wordlist.text().strip(),
                     "keyfile_paths": keyfile_paths,
+                    "estimated_job_count": estimated_job_count,
                     "created_timestamp": utc_now_iso(),
                 }
                 self.accept()

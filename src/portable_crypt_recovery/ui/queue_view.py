@@ -36,10 +36,13 @@ class QueueView:  # pragma: no cover
                 self.btn_resume = QPushButton("Resume")
                 self.btn_skip = QPushButton("Skip Selected")
                 self.btn_restart = QPushButton("Restart Selected")
+                self.btn_clear_queue = QPushButton("Clear Queue")
+                self.btn_copy_cmd = QPushButton("Copy Command")
                 for btn in [
                     self.btn_start, self.btn_pause_now, self.btn_pause_after,
                     self.btn_stop_save, self.btn_stop_discard, self.btn_resume,
                     self.btn_skip, self.btn_restart,
+                    self.btn_clear_queue, self.btn_copy_cmd,
                 ]:
                     controls_layout.addWidget(btn)
                 layout.addWidget(controls_group)
@@ -63,6 +66,10 @@ class QueueView:  # pragma: no cover
                 splitter = QSplitter(_Qt.Orientation.Vertical)
 
                 self.job_list = QListWidget()
+                from PySide6.QtWidgets import QAbstractItemView
+                self.job_list.setSelectionMode(
+                    QAbstractItemView.SelectionMode.ExtendedSelection
+                )
                 splitter.addWidget(self.job_list)
 
                 log_widget = QWidget()
@@ -92,6 +99,8 @@ class QueueView:  # pragma: no cover
                 self.btn_resume.clicked.connect(self._resume)
                 self.btn_skip.clicked.connect(self._skip_selected)
                 self.btn_restart.clicked.connect(self._restart_selected)
+                self.btn_clear_queue.clicked.connect(self._clear_queue)
+                self.btn_copy_cmd.clicked.connect(self._copy_command)
                 self.job_list.currentItemChanged.connect(self._on_job_selected)
 
                 # Poll timer
@@ -272,9 +281,102 @@ class QueueView:  # pragma: no cover
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 from portable_crypt_recovery.models.queue_state import QueueState
 
+                selected = self.job_list.selectedItems()
+                if not selected:
+                    return
+
+                job_ids = [it.data(256) for it in selected if it.data(256)]
+                if not job_ids:
+                    return
+
+                state = get_app_state()
+                if not state.is_workspace_open():
+                    return
+
+                queue_file = state.workspace_root / "queue" / "queue-state.json"
+                try:
+                    qs = QueueState.from_dict(
+                        json.loads(queue_file.read_text(encoding="utf-8"))
+                    )
+                except Exception:
+                    return
+
+                from portable_crypt_recovery.core.timestamps import utc_now_iso
+                changed = False
+                for job_id in job_ids:
+                    if job_id in qs.jobs:
+                        qs.jobs[job_id].status = new_status
+                        qs.jobs[job_id].updated_timestamp = utc_now_iso()
+                        if new_status == "pending":
+                            qs.jobs[job_id].command_array = []
+                        changed = True
+                if changed:
+                    atomic_write_json(queue_file, qs.to_dict())
+                    self._refresh_list()
+
+            def _clear_queue(self) -> None:
+                import json
+
+                from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
+                from portable_crypt_recovery.models.queue_state import QueueState
+
+                if self._runner is not None:
+                    QMessageBox.warning(
+                        self, "Queue Active",
+                        "Stop the queue before clearing it."
+                    )
+                    return
+
+                state = get_app_state()
+                if not state.is_workspace_open():
+                    return
+
+                queue_file = state.workspace_root / "queue" / "queue-state.json"
+                try:
+                    qs = QueueState.from_dict(
+                        json.loads(queue_file.read_text(encoding="utf-8"))
+                    )
+                except Exception:
+                    qs = QueueState()
+
+                count = len(qs.queue_order)
+                if count == 0:
+                    QMessageBox.information(self, "Clear Queue", "Queue is already empty.")
+                    return
+
+                reply = QMessageBox.question(
+                    self, "Clear Queue",
+                    f"Remove all {count} job(s) from the queue?\n\n"
+                    "This cannot be undone. Jobs will need to be re-sent from the Jobs tab.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
+                qs.jobs.clear()
+                qs.queue_order.clear()
+                qs.current_running_job = None
+                atomic_write_json(queue_file, qs.to_dict())
+                self.txt_log.clear()
+                self.lbl_log_header.setText("Select a job to view its log")
+                self._refresh_list()
+
+            def _copy_command(self) -> None:
+                from PySide6.QtWidgets import QApplication
+
                 item = self.job_list.currentItem()
                 if item is None:
+                    self.lbl_log_header.setText("Select a job first to copy its command.")
                     return
+
+                import json
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.models.queue_state import QueueState
 
                 job_id = item.data(256)
                 state = get_app_state()
@@ -289,15 +391,22 @@ class QueueView:  # pragma: no cover
                 except Exception:
                     return
 
-                if job_id in qs.jobs:
-                    from portable_crypt_recovery.core.timestamps import utc_now_iso
-                    qs.jobs[job_id].status = new_status
-                    qs.jobs[job_id].updated_timestamp = utc_now_iso()
-                    # Clear stale command array so it is rebuilt fresh on next start
-                    if new_status == "pending":
-                        qs.jobs[job_id].command_array = []
-                    atomic_write_json(queue_file, qs.to_dict())
-                    self._refresh_list()
+                job = qs.jobs.get(job_id)
+                if job is None:
+                    return
+
+                if not job.command_array:
+                    self.lbl_log_header.setText(
+                        "No command built yet — start the queue to generate commands."
+                    )
+                    return
+
+                cmd_str = " ".join(job.command_array)
+                clipboard = QApplication.clipboard()
+                clipboard.setText(cmd_str)
+                self.lbl_log_header.setText(
+                    f"✓ Command copied to clipboard  ({len(job.command_array)} args)"
+                )
 
             # ------------------------------------------------------------------
             # Job selection → log viewer
@@ -516,6 +625,8 @@ class QueueView:  # pragma: no cover
                 self.btn_resume.setEnabled(paused)
                 self.btn_skip.setEnabled(True)
                 self.btn_restart.setEnabled(True)
+                self.btn_clear_queue.setEnabled(stopped)
+                self.btn_copy_cmd.setEnabled(True)
 
             def update_progress(self, percent: float, description: str = "") -> None:
                 self.progress_bar.setValue(int(percent))

@@ -43,11 +43,17 @@ class AddVolumeWizard:  # pragma: no cover
                 layout = QVBoxLayout(self)
 
                 # Ownership confirmation
-                ownership_group = QGroupBox("Ownership Confirmation")
+                ownership_group = QGroupBox("⚠ Ownership Confirmation")
+                ownership_group.setStyleSheet(
+                    "QGroupBox { border: 2px solid #cc3333; border-radius: 4px; "
+                    "margin-top: 6px; color: #cc3333; font-weight: bold; } "
+                    "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+                )
                 ownership_layout = QVBoxLayout(ownership_group)
                 self.chk_ownership = QCheckBox(
                     "I confirm I own or am authorized to recover this volume."
                 )
+                self.chk_ownership.setStyleSheet("color: #cc3333; font-weight: bold;")
                 ownership_layout.addWidget(self.chk_ownership)
                 layout.addWidget(ownership_group)
 

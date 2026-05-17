@@ -26,15 +26,21 @@ class TargetsView:  # pragma: no cover
                 toolbar = QHBoxLayout()
                 self.btn_add = QPushButton("Add Volume...")
                 self.btn_view_headers = QPushButton("View Headers")
-                self.btn_remove = QPushButton("Remove Target")
+                self.btn_remove = QPushButton("Remove Selected")
+                self.btn_remove_all = QPushButton("Remove All")
                 toolbar.addWidget(self.btn_add)
                 toolbar.addWidget(self.btn_view_headers)
                 toolbar.addWidget(self.btn_remove)
+                toolbar.addWidget(self.btn_remove_all)
                 toolbar.addStretch()
                 layout.addLayout(toolbar)
 
                 # Target list
+                from PySide6.QtWidgets import QAbstractItemView
                 self.target_list = QListWidget()
+                self.target_list.setSelectionMode(
+                    QAbstractItemView.SelectionMode.ExtendedSelection
+                )
                 layout.addWidget(self.target_list, 1)
 
                 future_lbl = QLabel(
@@ -46,6 +52,7 @@ class TargetsView:  # pragma: no cover
                 self.btn_add.clicked.connect(self._open_add_wizard)
                 self.btn_view_headers.clicked.connect(self._view_headers)
                 self.btn_remove.clicked.connect(self._remove_target)
+                self.btn_remove_all.clicked.connect(self._remove_all_targets)
 
                 self._refresh_list()
 
@@ -308,36 +315,38 @@ class TargetsView:  # pragma: no cover
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
 
-                item = self.target_list.currentItem()
-                if item is None:
+                selected = self.target_list.selectedItems()
+                if not selected:
                     QMessageBox.warning(self, "Remove Target", "No target selected.")
                     return
 
-                tid = item.data(256)  # stored as target_id string
-                if not tid:
+                tids = [it.data(256) for it in selected if it.data(256)]
+                if not tids:
                     return
 
-                # Look up the display name from targets.json for the confirmation prompt
                 state = get_app_state()
                 if not state.is_workspace_open():
                     return
 
                 targets_file = state.workspace_root / "targets" / "targets.json"
-                display = tid
                 try:
                     data = json.loads(targets_file.read_text(encoding="utf-8"))
-                    for t in data.get("targets", []):
-                        if t.get("target_id") == tid:
-                            display = t.get("display_name", tid)
-                            break
                 except Exception:
                     data = {"schema_version": 1, "targets": []}
+
+                # Build display names for confirmation
+                id_to_name = {
+                    t.get("target_id"): t.get("display_name", t.get("target_id", ""))
+                    for t in data.get("targets", [])
+                }
+                names = [id_to_name.get(tid, tid) for tid in tids]
+                names_str = "\n".join(f"  • {n}" for n in names)
 
                 reply = QMessageBox.question(
                     self,
                     "Remove Target",
-                    f"Remove target '{display}'?\n\n"
-                    "The target record will be deleted. Extracted header files in\n"
+                    f"Remove {len(tids)} target(s)?\n{names_str}\n\n"
+                    "Target records will be deleted. Extracted header files in\n"
                     "headers/normalized/ and headers/metadata/ are NOT deleted\n"
                     "(use Workspace Cleanup to remove them).",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -346,15 +355,61 @@ class TargetsView:  # pragma: no cover
                 if reply != QMessageBox.StandardButton.Yes:
                     return
 
+                tid_set = set(tids)
                 try:
                     data["targets"] = [
                         t for t in data.get("targets", [])
-                        if t.get("target_id") != tid
+                        if t.get("target_id") not in tid_set
                     ]
                     atomic_write_json(targets_file, data)
                     state.target_count = len(data["targets"])
                 except Exception as exc:
-                    QMessageBox.critical(self, "Remove Target", f"Failed to remove target:\n{exc}")
+                    QMessageBox.critical(self, "Remove Target", f"Failed to remove target(s):\n{exc}")
+                    return
+
+                self._refresh_list()
+
+            def _remove_all_targets(self) -> None:
+                import json
+
+                from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
+                state = get_app_state()
+                if not state.is_workspace_open():
+                    return
+
+                targets_file = state.workspace_root / "targets" / "targets.json"
+                try:
+                    data = json.loads(targets_file.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {"schema_version": 1, "targets": []}
+
+                count = len(data.get("targets", []))
+                if count == 0:
+                    QMessageBox.information(self, "Remove All", "No targets to remove.")
+                    return
+
+                reply = QMessageBox.question(
+                    self,
+                    "Remove All Targets",
+                    f"Remove all {count} target(s)?\n\n"
+                    "All target records will be deleted. Header files on disk are NOT deleted\n"
+                    "(use Workspace Cleanup to remove them).",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
+                try:
+                    data["targets"] = []
+                    atomic_write_json(targets_file, data)
+                    state.target_count = 0
+                except Exception as exc:
+                    QMessageBox.critical(self, "Remove All", f"Failed:\n{exc}")
                     return
 
                 self._refresh_list()
