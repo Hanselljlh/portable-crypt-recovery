@@ -1,7 +1,7 @@
 """Tests for result_classifier — hashcat exit code mapping."""
 
-import pytest
 from pathlib import Path
+
 from portable_crypt_recovery.services.queue.result_classifier import classify_result
 
 
