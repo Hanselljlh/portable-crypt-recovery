@@ -125,16 +125,66 @@ class QueueRunner:
         self._queue_state.current_running_job = job.job_id
         self._save_queue_state()
 
-        # Use existing command_array if set, otherwise it's empty
-        args = job.command_array
-        if not args:
+        try:
+            self._run_job_inner(job)
+        except Exception as exc:
+            # Safety net: never leave a job stuck as "running" if something
+            # unexpected throws (bad path, file lock, OS error, etc.).
             job.status = "failed"
             job.updated_timestamp = utc_now_iso()
+            # Best-effort: append the exception to the log so the user can see why
+            try:
+                log_path = self._workspace_root / job.log_path
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(
+                        f"\n=== PCR INTERNAL ERROR ===\n"
+                        f"exception   : {type(exc).__name__}: {exc}\n"
+                        f"=========================\n"
+                    )
+            except OSError:
+                pass
+        finally:
+            self._queue_state.current_running_job = None
             self._save_queue_state()
-            return
+            if self._on_status_update:
+                self._on_status_update(self._queue_state)
 
+    def _run_job_inner(self, job: QueuedJob) -> None:
+        """Core job execution logic; called inside a try/except by _run_job."""
         log_path = self._workspace_root / job.log_path
         log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Use existing command_array if set, otherwise it's empty.
+        # Write the log header FIRST so the log always has some content,
+        # even if the command array is empty or hashcat exits immediately.
+        args = job.command_array
+        start_ts = utc_now_iso()
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(
+                f"=== PCR JOB START ===\n"
+                f"job_id      : {job.job_id}\n"
+                f"mode        : {job.hashcat_mode}\n"
+                f"session     : {job.session_name}\n"
+                f"started     : {start_ts}\n"
+                f"command     : {' '.join(args) if args else '(none — command array was empty)'}\n"
+                f"outfile     : {self._workspace_root / job.outfile_path}\n"
+                f"potfile     : {self._workspace_root / job.potfile_path}\n"
+                f"=== HASHCAT OUTPUT BELOW ===\n"
+            )
+
+        if not args:
+            # No command was built for this job — mark failed and write the
+            # reason to the log so the user can see why it didn't run.
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(
+                    "\n[ERROR] command_array is empty.\n"
+                    "This usually means command building failed at queue start.\n"
+                    "Check that the header file, wordlist, and hashcat path all exist,\n"
+                    "then restart the queue to rebuild commands.\n"
+                )
+            job.status = "failed"
+            return
 
         # cwd MUST be the directory containing hashcat.exe so that hashcat can
         # resolve ./OpenCL/, ./modules/, and other relative data paths it ships
@@ -154,25 +204,6 @@ class QueueRunner:
             "TMPDIR": str(tmp_dir),
         }
 
-        # Write a wrapper header to the log so the file always exists and is
-        # readable even if hashcat exits before producing any stdout.
-        start_ts = utc_now_iso()
-        try:
-            with log_path.open("a", encoding="utf-8") as fh:
-                fh.write(
-                    f"=== PCR JOB START ===\n"
-                    f"job_id      : {job.job_id}\n"
-                    f"mode        : {job.hashcat_mode}\n"
-                    f"session     : {job.session_name}\n"
-                    f"started     : {start_ts}\n"
-                    f"command     : {' '.join(args)}\n"
-                    f"outfile     : {self._workspace_root / job.outfile_path}\n"
-                    f"potfile     : {self._workspace_root / job.potfile_path}\n"
-                    f"=== HASHCAT OUTPUT BELOW ===\n"
-                )
-        except OSError:
-            pass
-
         with self._lock:
             self._current_runner = HashcatProcessRunner(
                 args=args,
@@ -183,6 +214,7 @@ class QueueRunner:
             self._current_runner.start()
 
         exit_code = self._current_runner.wait()
+        stdout_lines = self._current_runner.get_result().stdout_lines
 
         with self._lock:
             self._current_runner = None
@@ -199,28 +231,30 @@ class QueueRunner:
             if classification.cracked_password:
                 job.cracked_password = classification.cracked_password
 
-        # Write footer so the log shows final outcome
+        # Write footer — always include exit code so failed jobs are diagnosable.
+        # If hashcat produced no output at all and still failed, say so explicitly
+        # so the user knows to check the command / driver / module.
         end_ts = utc_now_iso()
-        try:
-            with log_path.open("a", encoding="utf-8") as fh:
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write("\n=== PCR JOB END ===\n")
+            fh.write(f"finished    : {end_ts}\n")
+            fh.write(f"exit_code   : {exit_code}\n")
+            fh.write(f"result      : {job.status}\n")
+            if not stdout_lines and exit_code not in (0, 1):
                 fh.write(
-                    f"\n=== PCR JOB END ===\n"
-                    f"finished    : {end_ts}\n"
-                    f"exit_code   : {exit_code}\n"
-                    f"result      : {job.status}\n"
+                    "\n[WARNING] Hashcat produced no output before exiting.\n"
+                    "Possible causes:\n"
+                    "  - Hash mode module not present in this hashcat build\n"
+                    "  - Unsupported flag for this hashcat version (e.g. --status-timer)\n"
+                    "  - OpenCL / CUDA driver missing or incompatible\n"
+                    "  - Header file path could not be resolved\n"
+                    f"Command was: {' '.join(args)}\n"
                 )
-                if job.cracked_password:
-                    fh.write(f"PASSWORD    : {job.cracked_password}\n")
-                fh.write("===================\n")
-        except OSError:
-            pass
+            if job.cracked_password:
+                fh.write(f"PASSWORD    : {job.cracked_password}\n")
+            fh.write("===================\n")
 
         job.updated_timestamp = utc_now_iso()
-        self._queue_state.current_running_job = None
-        self._save_queue_state()
-
-        if self._on_status_update:
-            self._on_status_update(self._queue_state)
 
     def _save_queue_state(self) -> None:
         path = self._workspace_root / "queue" / "queue-state.json"
