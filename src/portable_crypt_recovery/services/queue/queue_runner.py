@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -13,6 +14,51 @@ from portable_crypt_recovery.models.queue_state import QueueState
 from portable_crypt_recovery.services.hashcat.process_runner import HashcatProcessRunner
 from portable_crypt_recovery.services.queue.result_classifier import classify_result
 from portable_crypt_recovery.services.queue.runner_lock import acquire_lock, release_lock
+
+_EXIT_MEANINGS: dict[int | None, str] = {
+    0: "CRACKED",
+    1: "EXHAUSTED — all candidates tried, no match",
+    2: "ABORTED — user or runtime stopped job",
+    3: "ABORTED_CHECKPOINT",
+    4: "ABORTED_RUNTIME",
+    5: "ABORTED_FINISH",
+    4294967295: "ERROR (-1) — hashcat internal error",
+}
+
+
+def _summarize_hardware_flags(args: list[str]) -> str:
+    """Extract key hardware flags from a hashcat command array into a readable line.
+
+    Reads the already-built command array so the log reflects what was actually
+    passed to hashcat (not what settings claimed to be set at the time).
+    """
+    cuda_ignored = "--backend-ignore-cuda" in args
+
+    cpu_opencl = False
+    if "-D" in args:
+        idx = args.index("-D")
+        if idx + 1 < len(args):
+            cpu_opencl = args[idx + 1] == "1"
+
+    optimized = "-O" in args
+    hwmon_off = "--hwmon-disable" in args
+    logfile_off = "--logfile-disable" in args
+
+    devices = "all"
+    if "-d" in args:
+        idx = args.index("-d")
+        if idx + 1 < len(args):
+            devices = args[idx + 1]
+
+    parts = [
+        f"CUDA={'ignored (--backend-ignore-cuda)' if cuda_ignored else 'enabled'}",
+        f"cpu_opencl={'yes (-D 1)' if cpu_opencl else 'no'}",
+        f"devices={devices}",
+        f"opt_kernels={'yes (-O)' if optimized else 'no'}",
+        f"hwmon={'off' if hwmon_off else 'on'}",
+        f"logfile={'off' if logfile_off else 'on'}",
+    ]
+    return "  |  ".join(parts)
 
 
 class QueueRunner:
@@ -164,6 +210,8 @@ class QueueRunner:
         # even if the command array is empty or hashcat exits immediately.
         args = job.command_array
         start_ts = utc_now_iso()
+        start_mono = time.monotonic()
+        hardware_summary = _summarize_hardware_flags(args) if args else "(no command)"
         with log_path.open("a", encoding="utf-8") as fh:
             fh.write(
                 f"=== PCR JOB START ===\n"
@@ -171,6 +219,7 @@ class QueueRunner:
                 f"mode        : {job.hashcat_mode}\n"
                 f"session     : {job.session_name}\n"
                 f"started     : {start_ts}\n"
+                f"hardware    : {hardware_summary}\n"
                 f"command     : {' '.join(args) if args else '(none — command array was empty)'}\n"
                 f"outfile     : {self._workspace_root / job.outfile_path}\n"
                 f"potfile     : {self._workspace_root / job.potfile_path}\n"
@@ -241,16 +290,21 @@ class QueueRunner:
 
         # Write footer — always include exit code so failed jobs are diagnosable.
         end_ts = utc_now_iso()
+        elapsed_s = time.monotonic() - start_mono
+        exit_meaning = _EXIT_MEANINGS.get(exit_code, f"unknown ({exit_code})")
         with log_path.open("a", encoding="utf-8") as fh:
             fh.write("\n=== PCR JOB END ===\n")
             fh.write(f"finished    : {end_ts}\n")
-            fh.write(f"exit_code   : {exit_code}\n")
+            fh.write(f"elapsed     : {elapsed_s:.2f}s\n")
+            fh.write(f"exit_code   : {exit_code}  ({exit_meaning})\n")
             fh.write(f"result      : {job.status}\n")
+            fh.write(f"hardware    : {hardware_summary}\n")
             # Warn when hashcat produced zero output and the exit code is an error
             if not stdout_lines and exit_code not in (0, 1, 2, 3, 4, 5):
                 fh.write(
                     "\n[WARNING] Hashcat produced no output before exiting.\n"
                     "Possible causes:\n"
+                    "  - CUDA PTX version mismatch (try enabling 'Ignore CUDA' in Settings)\n"
                     "  - Hash mode module not present in this hashcat build\n"
                     "  - Unsupported flag for this hashcat version\n"
                     "  - OpenCL / CUDA driver missing or incompatible\n"
