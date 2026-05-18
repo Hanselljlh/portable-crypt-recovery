@@ -265,6 +265,15 @@ class JobsView:  # pragma: no cover
                         kf_iterations += list(keyfile_sets)
 
                     for kf_iter in kf_iterations:
+                        # Persist the KeyfileSet JSON so command_builder and
+                        # cracked_package can resolve it at runtime.
+                        if kf_iter is not None:
+                            kf_list_dir = ws / "generated" / "keyfile-lists"
+                            kf_list_dir.mkdir(parents=True, exist_ok=True)
+                            kf_json_path = kf_list_dir / f"{kf_iter.set_id}.json"
+                            if not kf_json_path.exists():
+                                atomic_write_json(kf_json_path, kf_iter.to_dict())
+
                         iter_sets = None if kf_iter is None else [kf_iter]
                         jobs = expand_jobs(
                             target_id=draft["target_id"],

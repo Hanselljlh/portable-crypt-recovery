@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import threading
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -53,7 +54,7 @@ class HashcatProcessRunner:
         self._extra_env = extra_env
         self._process: subprocess.Popen | None = None  # type: ignore[type-arg]
         self._lock = threading.Lock()
-        self._stdout_lines: list[str] = []
+        self._stdout_lines: deque[str] = deque(maxlen=200)
 
     def start(self) -> None:
         """Start the Hashcat subprocess."""

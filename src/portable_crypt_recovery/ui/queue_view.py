@@ -417,6 +417,7 @@ class QueueView:  # pragma: no cover
                 qs.queue_order.clear()
                 qs.current_running_job = None
                 atomic_write_json(queue_file, qs.to_dict())
+                state.job_count = 0
                 self.txt_log.clear()
                 self.lbl_log_header.setText("Select a job to view its log")
                 self._refresh_list()
@@ -790,6 +791,8 @@ class QueueView:  # pragma: no cover
                     )
                 else:
                     self.lbl_remaining.setText("")
+                    from portable_crypt_recovery import __app_name__, __version__
+                    self.window().setWindowTitle(f"{__app_name__} {__version__}")
 
             # ------------------------------------------------------------------
             # Button state management
