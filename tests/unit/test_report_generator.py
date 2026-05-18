@@ -117,3 +117,73 @@ def test_report_manifest_has_schema_version(tmp_path):
     pkg_dir = ws.root / report.report_folder
     manifest = json.loads((pkg_dir / "recovery-package-manifest.json").read_text())
     assert manifest["schema_version"] == 1
+
+
+def test_report_manifest_does_not_expose_original_keyfile_paths(tmp_path):
+    """Exported recovery package manifest must not leak original_path for keyfiles."""
+    from portable_crypt_recovery.core.ids import new_id as _new_id
+    from portable_crypt_recovery.models.keyfile_set import KeyfileEntry, KeyfileSet
+    from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws.root)
+
+    # Create a task that references a keyfile set
+    kf_set_id = _new_id("kfset")
+    task_id = _new_id("task")
+    session = f"pcr_{task_id}"
+    job = QueuedTask(
+        task_id=task_id,
+        target_id="target_001",
+        header_id=header.header_id,
+        hash_mode_set_id="modeset_001",
+        pim_set_id=None,
+        keyfile_set_id=kf_set_id,
+        password_source_id="pwsrc_001",
+        status="cracked",
+        command_array=["hashcat"],
+        potfile_path=f"hashcat/potfile/{session}.potfile",
+        outfile_path=f"hashcat/output/{session}.out",
+        log_path=f"hashcat/logs/{session}.log",
+        session_name=session,
+        hashcat_mode=29411,
+        pim_value=None,
+        pim_mode="default",
+        created_timestamp=utc_now_iso(),
+        updated_timestamp=utc_now_iso(),
+    )
+
+    # Write keyfile set JSON with a sensitive original_path
+    kf_entry = KeyfileEntry(
+        keyfile_id="keyfile_001",
+        original_path="C:\\Users\\Alice\\Documents\\secret.key",
+        normalized_workspace_path="inputs/keyfiles/normalized/keyfile_001.key",
+        size_bytes=32,
+        sha256="deadbeef" * 8,
+    )
+    kf_set = KeyfileSet(set_id=kf_set_id, entries=[kf_entry])
+    kf_list_dir = ws.root / "generated" / "keyfile-lists"
+    kf_list_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(kf_list_dir / f"{kf_set_id}.json", kf_set.to_dict())
+
+    # Write the normalized keyfile on disk
+    norm_dir = ws.root / "inputs" / "keyfiles" / "normalized"
+    norm_dir.mkdir(parents=True, exist_ok=True)
+    (norm_dir / "keyfile_001.key").write_bytes(b"x" * 32)
+
+    report = generate_cracked_report(ws.root, job, "pass", run_id="r001")
+    pkg_dir = ws.root / report.report_folder
+    manifest = json.loads((pkg_dir / "recovery-package-manifest.json").read_text())
+
+    assert len(manifest["keyfiles"]) == 1
+    kf_entry_out = manifest["keyfiles"][0]
+
+    # Must NOT contain the source-machine path
+    assert "original_path" not in kf_entry_out
+    assert "Alice" not in json.dumps(kf_entry_out)
+
+    # Must retain identification-friendly fields
+    assert kf_entry_out["keyfile_id"] == "keyfile_001"
+    assert "sha256" in kf_entry_out
+    assert "size_bytes" in kf_entry_out
+    assert "package_filename" in kf_entry_out

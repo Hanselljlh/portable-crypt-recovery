@@ -37,7 +37,7 @@ The Queue screen should accept these user actions:
 Start Queue
 Pause Now
 Pause After Current Job
-Stop and Save
+Stop and Re-queue
 Stop and Discard
 Resume
 Skip Selected Job
@@ -100,7 +100,6 @@ The queue runner should use these main statuses:
 pending
 running
 paused
-stopped_saved
 cracked
 exhausted
 failed
@@ -124,12 +123,6 @@ Only one job may have this status at a time.
 The active Hashcat process is paused but still running and controlled by the app.
 
 This is for short-term pausing while the app remains open.
-
-### stopped_saved
-
-The Hashcat process was stopped in a way that preserves restore data when possible.
-
-The job may be resumed from its restore file.
 
 ### cracked
 
@@ -230,22 +223,20 @@ Expected behavior:
 
 This is the safest option when the user wants the current job to finish cleanly before the queue stops.
 
-### Stop and Save
+### Stop and Re-queue
 
-Stop and Save should stop the active Hashcat job while preserving restore data when possible.
+Stop and Re-queue should stop the active Hashcat job and reset the task so it can be run again from the beginning.
 
 Expected behavior:
 
-- request Hashcat checkpoint or clean stop when possible
-- save Hashcat restore data inside the workspace
+- stop the active Hashcat process immediately
+- reset the task status to pending
 - save queue state immediately
-- mark the job as stopped_saved if resume data is available
 - mark the queue as stopped
 - do not start the next job
 
-The app should warn that stopping at a checkpoint may take time.
-
-If the app cannot confirm a valid restore file, it should mark the job as failed or interrupted and offer Restart Selected Job.
+The task re-runs from scratch when the queue is started again.
+No restore file is saved or used.
 
 ### Stop and Discard
 
@@ -278,19 +269,15 @@ If the app is still open and the Hashcat process is paused:
 - mark the job as running
 - save queue state immediately
 
-#### Resume after stop, restart, or crash
+#### Resume after crash or unexpected stop
 
-If the app was closed, restarted, or crashed:
+If the app was closed or crashed while a task was running:
 
 - load queue state
-- detect the last running or stopped_saved job
-- check for its restore file
-- check its Hashcat session name
-- check that the workspace paths still exist
-- rebuild the restore command as an argument array
-- resume Hashcat from the saved session and restore file
-- mark the job as running
+- detect any task left in running status
+- reset it to pending (the run cannot be safely continued)
 - save queue state immediately
+- show a recovery prompt
 
 The app should not automatically resume cracking after a crash without user action.
 
@@ -299,16 +286,14 @@ On startup, it should show a recovery prompt instead.
 Suggested recovery prompt:
 
 ```text
-A previous Hashcat job appears to have been interrupted.
+A previous Hashcat task appears to have been interrupted.
 
-Job: <job name>
+Task: <task name>
 Session: <session name>
-Restore file: <path>
 
 Choose:
-- Resume from restore
 - Restart from beginning
-- Skip job
+- Skip task
 - Leave queue stopped
 ```
 
@@ -343,7 +328,6 @@ cracked
 exhausted
 failed
 skipped
-stopped_saved
 ```
 
 Restarting a cracked job should require confirmation because it may create duplicate work.
@@ -744,7 +728,7 @@ Immediate save events include:
 - job resumed
 - pause-after-current enabled
 - stop requested
-- job stopped and saved
+- job stopped and re-queued
 - job stopped and discarded
 - job skipped
 - job restarted
@@ -777,19 +761,16 @@ The app should check:
 - last known process ID
 - last queue log entries
 
-If a job was marked running but no controlled Hashcat process exists, the app should change it to one of these states:
+If a task was marked running but no controlled Hashcat process exists, the app should change it to one of these states:
 
 ```text
-stopped_saved
+pending
 failed
-needs_review
 ```
 
-Use `stopped_saved` only if a valid restore file appears to exist.
+Reset to `pending` if the task can safely be re-run from the beginning.
 
-Use `failed` if no restore data exists and the run cannot be resumed.
-
-Use `needs_review` if the app cannot safely decide.
+Use `failed` if the app cannot determine a safe course of action.
 
 The app should not automatically start Hashcat after crash recovery.
 
@@ -1003,7 +984,7 @@ Open questions for later steps:
 
 - The app runs one Hashcat job at a time.
 - The next job starts only after the current job exits, is classified, and state is saved.
-- Queue runner statuses should include pending, running, paused, stopped_saved, cracked, exhausted, failed, and skipped.
+- Queue runner statuses should include pending, running, paused, cracked, exhausted, failed, and skipped.
 - Draft jobs belong to the job builder, not the active queue runner.
 - Completed may be a UI grouping, but final job results should be cracked, exhausted, failed, or skipped.
 - The queue supports Start Queue.
@@ -1011,12 +992,12 @@ Open questions for later steps:
 - Pause Now pauses the active Hashcat process while keeping it alive.
 - The queue supports Pause After Current Job.
 - Pause After Current Job lets the active job finish and then stops the queue before starting another job.
-- The queue supports Stop and Save.
-- Stop and Save preserves restore data when possible.
+- The queue supports Stop and Re-queue.
+- Stop and Re-queue stops the active task and resets it to pending for a full re-run.
 - The queue supports Stop and Discard.
 - Stop and Discard discards resume progress for the current run but does not delete the job definition.
 - The queue supports Resume.
-- Resume can continue a paused active process or resume from a restore file after restart.
+- Resume continues a paused active process.
 - The queue supports Skip Selected Job.
 - The queue supports Restart Selected Job.
 - Restart Selected Job should create a new run attempt and a new unique Hashcat session name.

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import threading
-
 DEFAULT_CLIPBOARD_CLEAR_SECONDS = 60
 
-_clear_timer: threading.Timer | None = None
-_timer_lock = threading.Lock()
+_pending_text: str = ""
+_qt_timer = None  # QTimer instance, created lazily on first use
 
 
 def copy_with_auto_clear(
@@ -17,8 +15,11 @@ def copy_with_auto_clear(
 
     Requires a running Qt application (uses QApplication.clipboard()).
     If ``clear_after_seconds`` is 0 or negative the clipboard is not auto-cleared.
+
+    The auto-clear timer runs on the Qt main thread via QTimer so it is safe
+    to call clipboard APIs from the timeout slot.
     """
-    global _clear_timer
+    global _pending_text, _qt_timer
 
     from PySide6.QtWidgets import QApplication
     cb = QApplication.clipboard()
@@ -27,23 +28,30 @@ def copy_with_auto_clear(
     if clear_after_seconds <= 0:
         return
 
-    with _timer_lock:
-        if _clear_timer is not None:
-            _clear_timer.cancel()
-        _clear_timer = threading.Timer(clear_after_seconds, _do_clear, args=(text,))
-        _clear_timer.daemon = True
-        _clear_timer.start()
+    _pending_text = text
+
+    from PySide6.QtCore import QTimer
+    if _qt_timer is None:
+        _qt_timer = QTimer()
+        _qt_timer.setSingleShot(True)
+        _qt_timer.timeout.connect(_do_clear)
+
+    # Calling start() on an already-running single-shot QTimer restarts it,
+    # cancelling the previous countdown — equivalent to cancel+restart.
+    _qt_timer.start(clear_after_seconds * 1000)
 
 
-def _do_clear(original_text: str) -> None:
-    """Clear clipboard only if it still contains the text we put there."""
-    global _clear_timer
+def _do_clear() -> None:
+    """Clear clipboard only if it still contains the text we put there.
+
+    Called from the QTimer timeout signal — always runs on the Qt main thread.
+    """
+    global _pending_text
     try:
         from PySide6.QtWidgets import QApplication
         cb = QApplication.clipboard()
-        if cb.text() == original_text:
+        if cb.text() == _pending_text:
             cb.clear()
     except Exception:
         pass
-    with _timer_lock:
-        _clear_timer = None
+    _pending_text = ""

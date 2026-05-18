@@ -50,8 +50,9 @@ def assemble_cracked_package(
                     kf_manifest.append(
                         {
                             "keyfile_id": entry.keyfile_id,
-                            "original_path": entry.original_path,
                             "package_filename": dest.name,
+                            "size_bytes": entry.size_bytes,
+                            "sha256": entry.sha256,
                         }
                     )
 
