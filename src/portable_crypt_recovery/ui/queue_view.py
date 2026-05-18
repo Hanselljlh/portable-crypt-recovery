@@ -477,17 +477,44 @@ class QueueView:  # pragma: no cover
                 if job is None:
                     return
 
-                if not job.command_array:
-                    self.lbl_log_header.setText(
-                        "No command built yet — start the queue to generate commands."
-                    )
-                    return
+                # Prefer the command logged in the .log file — it is the exact
+                # command that was passed to hashcat when the job actually ran.
+                # The command_array stored in queue-state.json is rebuilt every
+                # time the queue starts, so it reflects current settings, not
+                # necessarily what produced this job's output.
+                cmd_str: str | None = None
+                source = "log"
+                log_abs = state.workspace_root / job.log_path
+                if log_abs.exists():
+                    try:
+                        for line in log_abs.read_text(
+                            encoding="utf-8", errors="replace"
+                        ).splitlines():
+                            if line.startswith("command     : "):
+                                cmd_str = line[len("command     : "):]
+                                break
+                    except OSError:
+                        pass
 
-                cmd_str = " ".join(job.command_array)
+                # Fall back to command_array (for pending/unrun jobs)
+                if not cmd_str:
+                    if not job.command_array:
+                        self.lbl_log_header.setText(
+                            "No command built yet — start the queue to generate commands."
+                        )
+                        return
+                    # Quote any argument that contains a space so the result is
+                    # pasteable into PowerShell / CMD without modification.
+                    parts: list[str] = []
+                    for arg in job.command_array:
+                        parts.append(f'"{arg}"' if " " in arg else arg)
+                    cmd_str = " ".join(parts)
+                    source = "queue-state"
+
                 clipboard = QApplication.clipboard()
                 clipboard.setText(cmd_str)
                 self.lbl_log_header.setText(
-                    f"✓ Command copied to clipboard  ({len(job.command_array)} args)"
+                    f"✓ Hashcat command copied ({source})"
                 )
 
             # ------------------------------------------------------------------
@@ -562,18 +589,30 @@ class QueueView:  # pragma: no cover
                     lines.append("=" * 60)
                     lines.append("")
 
-                # Command array
-                if job.command_array:
-                    lines.append("=== COMMAND ===")
-                    lines.append(" ".join(job.command_array))
-                    lines.append("")
+                # Command — read from the log file so it matches what actually ran.
+                # Fall back to command_array for pending jobs that haven't run yet.
+                log_abs = state.workspace_root / job.log_path
+                displayed_cmd: str | None = None
+                if log_abs.exists():
+                    try:
+                        for _line in log_abs.read_text(
+                            encoding="utf-8", errors="replace"
+                        ).splitlines():
+                            if _line.startswith("command     : "):
+                                displayed_cmd = _line[len("command     : "):]
+                                break
+                    except OSError:
+                        pass
+                if displayed_cmd is None and job.command_array:
+                    displayed_cmd = " ".join(job.command_array)
+                lines.append("=== COMMAND (actual hashcat invocation) ===")
+                if displayed_cmd:
+                    lines.append(displayed_cmd)
                 else:
-                    lines.append("=== COMMAND ===")
                     lines.append("(not yet built — send to queue and start to generate)")
-                    lines.append("")
+                lines.append("")
 
                 # Log file
-                log_abs = state.workspace_root / job.log_path
                 status_label = job.status.upper()
                 self.lbl_log_header.setText(
                     f"Job {job_id[:8]}  |  mode {job.hashcat_mode}"
