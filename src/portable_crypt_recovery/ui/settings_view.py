@@ -63,10 +63,13 @@ class SettingsView:  # pragma: no cover
 
             def run(self):
                 import subprocess
+                from pathlib import Path
+                exe = Path(self._path)
                 try:
                     r = subprocess.run(
                         [self._path, "--backend-info"],
-                        capture_output=True, text=True, timeout=30
+                        capture_output=True, text=True, timeout=30,
+                        cwd=str(exe.parent),
                     )
                     self.finished.emit(r.stdout + r.stderr)
                 except Exception as exc:
