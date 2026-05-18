@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from collections.abc import Callable
@@ -26,11 +27,12 @@ _EXIT_MEANINGS: dict[int | None, str] = {
 }
 
 
-def _summarize_hardware_flags(args: list[str]) -> str:
+def _summarize_hardware_flags(args: list[str], stored_mode: int | None = None) -> str:
     """Extract key hardware flags from a hashcat command array into a readable line.
 
     Reads the already-built command array so the log reflects what was actually
     passed to hashcat (not what settings claimed to be set at the time).
+    stored_mode: the mode number recorded in the job (before any substitution).
     """
     cuda_ignored = "--backend-ignore-cuda" in args
 
@@ -50,6 +52,20 @@ def _summarize_hardware_flags(args: list[str]) -> str:
         if idx + 1 < len(args):
             devices = args[idx + 1]
 
+    # Detect mode substitution: job stores original mode; command may use legacy
+    cmd_mode: int | None = None
+    if "-m" in args:
+        idx = args.index("-m")
+        if idx + 1 < len(args):
+            with contextlib.suppress(ValueError):
+                cmd_mode = int(args[idx + 1])
+    mode_note = ""
+    if stored_mode is not None and cmd_mode is not None and cmd_mode != stored_mode:
+        mode_note = (
+            f"  |  mode_substituted={stored_mode}→{cmd_mode}"
+            " (legacy GPU kernel, no CPU bridge)"
+        )
+
     parts = [
         f"CUDA={'ignored (--backend-ignore-cuda)' if cuda_ignored else 'enabled'}",
         f"cpu_opencl={'yes (-D 1)' if cpu_opencl else 'no'}",
@@ -58,7 +74,7 @@ def _summarize_hardware_flags(args: list[str]) -> str:
         f"hwmon={'off' if hwmon_off else 'on'}",
         f"logfile={'off' if logfile_off else 'on'}",
     ]
-    return "  |  ".join(parts)
+    return "  |  ".join(parts) + mode_note
 
 
 class QueueRunner:
@@ -211,7 +227,10 @@ class QueueRunner:
         args = job.command_array
         start_ts = utc_now_iso()
         start_mono = time.monotonic()
-        hardware_summary = _summarize_hardware_flags(args) if args else "(no command)"
+        hardware_summary = (
+            _summarize_hardware_flags(args, stored_mode=job.hashcat_mode)
+            if args else "(no command)"
+        )
         with log_path.open("a", encoding="utf-8") as fh:
             fh.write(
                 f"=== PCR JOB START ===\n"

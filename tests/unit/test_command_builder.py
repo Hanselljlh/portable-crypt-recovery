@@ -401,3 +401,76 @@ def test_ignore_cuda_off_by_default(tmp_path):
 
     args = build_command(job, _fake_exe(tmp_path), ws)
     assert "--backend-ignore-cuda" not in args
+
+
+# ---------------------------------------------------------------------------
+# Mode substitution: 294xx/293xx → 137xx/62xx when ignore_cuda=True
+# ---------------------------------------------------------------------------
+
+def test_ignore_cuda_substitutes_vc_current_to_legacy(tmp_path):
+    """With ignore_cuda=True, 29411 must become 13711 in the command array."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29411  # VeraCrypt current RIPEMD-160
+
+    args = build_command(job, _fake_exe(tmp_path), ws, ignore_cuda=True)
+    m_idx = args.index("-m")
+    assert args[m_idx + 1] == "13711", (
+        "29411 should be substituted to 13711 when CUDA is ignored"
+    )
+
+
+def test_ignore_cuda_substituted_mode_uses_binary_header(tmp_path):
+    """After substitution 29411→13711, the hash input must be the raw .bin file."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29411
+
+    args = build_command(job, _fake_exe(tmp_path), ws, ignore_cuda=True)
+    # Locate hash input (argument after -m value)
+    m_idx = args.index("-m")
+    hash_input = args[m_idx + 2]  # exe -a 0 -m 13711 <hash_input>
+    assert hash_input.endswith(".bin"), (
+        f"Substituted legacy mode should use raw .bin, got: {hash_input}"
+    )
+    assert "vc_hash" not in hash_input
+
+
+def test_no_substitution_without_ignore_cuda(tmp_path):
+    """With CUDA active, 29411 must stay 29411 (no substitution)."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29421
+
+    args = build_command(job, _fake_exe(tmp_path), ws, ignore_cuda=False)
+    m_idx = args.index("-m")
+    assert args[m_idx + 1] == "29421", "Mode must not be substituted when CUDA is active"
+
+
+def test_legacy_mode_not_substituted_when_ignore_cuda(tmp_path):
+    """Legacy modes (137xx) are already GPU-native — must not be double-substituted."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 13721  # already legacy
+
+    args = build_command(job, _fake_exe(tmp_path), ws, ignore_cuda=True)
+    m_idx = args.index("-m")
+    assert args[m_idx + 1] == "13721", "Legacy mode should remain unchanged"
+
+
+def test_tc_current_substituted_to_legacy_when_ignore_cuda(tmp_path):
+    """TrueCrypt current mode 29311 should become 6211 when CUDA is ignored."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29311  # TrueCrypt current RIPEMD-160
+
+    args = build_command(job, _fake_exe(tmp_path), ws, ignore_cuda=True)
+    m_idx = args.index("-m")
+    assert args[m_idx + 1] == "6211", (
+        "29311 should be substituted to 6211 when CUDA is ignored"
+    )

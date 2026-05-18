@@ -15,6 +15,38 @@ class CommandBuilderError(Exception):
 
 
 # ---------------------------------------------------------------------------
+# Mode substitution: current → legacy when CUDA is unavailable
+# ---------------------------------------------------------------------------
+
+# The "current" VeraCrypt/TrueCrypt modes (294xx / 293xx) use a CPU bridge for
+# PBKDF2 key derivation.  With CUDA available the bridge runs on the GPU
+# (thousands of H/s).  With --backend-ignore-cuda the bridge falls back to a
+# single CPU thread — 655 k iterations per candidate = 30–550 s per password.
+#
+# The legacy modes (137xx / 62xx) run the full PBKDF2+AES computation inside
+# the OpenCL GPU kernel (no bridge).  They are 100–10 000× faster on OpenCL.
+# This table maps each current mode to its functionally identical legacy mode.
+_CURRENT_TO_LEGACY: dict[int, int] = {
+    # VeraCrypt non-system
+    29411: 13711, 29412: 13712, 29413: 13713,   # RIPEMD-160
+    29421: 13721, 29422: 13722, 29423: 13723,   # SHA-512
+    29431: 13731, 29432: 13732, 29433: 13733,   # Whirlpool
+    29451: 13751, 29452: 13752, 29453: 13753,   # SHA-256
+    29471: 13771, 29472: 13772, 29473: 13773,   # Streebog-512
+    # VeraCrypt system/boot
+    29441: 13741, 29442: 13742, 29443: 13743,   # RIPEMD-160 boot
+    29461: 13761, 29462: 13762, 29463: 13763,   # SHA-256 boot
+    29481: 13781, 29482: 13782, 29483: 13783,   # Streebog-512 boot
+    # TrueCrypt non-system
+    29311: 6211, 29312: 6212, 29313: 6213,       # RIPEMD-160
+    29321: 6221, 29322: 6222, 29323: 6223,       # SHA-512
+    29331: 6231, 29332: 6232, 29333: 6233,       # Whirlpool
+    # TrueCrypt system/boot
+    29341: 6241, 29342: 6242, 29343: 6243,       # RIPEMD-160 boot
+}
+
+
+# ---------------------------------------------------------------------------
 # Hash-input format helpers
 # ---------------------------------------------------------------------------
 
@@ -92,11 +124,20 @@ def build_command(
     # Attack mode: always dictionary (-a 0) for PCR jobs
     args += ["-a", "0"]
 
-    # Hash mode
-    args += ["-m", str(job.hashcat_mode)]
+    # When CUDA is unavailable (ignore_cuda=True), "current" format modes
+    # (294xx / 293xx) use a single-threaded CPU bridge for PBKDF2, making each
+    # candidate 30–550 s.  Substitute the equivalent legacy mode (137xx / 62xx)
+    # which runs the full PBKDF2+AES kernel on the GPU — 100–10 000× faster via
+    # OpenCL.  The job record keeps its original mode; only the command changes.
+    effective_mode = job.hashcat_mode
+    if ignore_cuda and effective_mode in _CURRENT_TO_LEGACY:
+        effective_mode = _CURRENT_TO_LEGACY[effective_mode]
+
+    args += ["-m", str(effective_mode)]
 
     # Hash input — legacy modes (137xx, 62xx) use raw binary; current modes
     # (293xx, 294xx) require $veracrypt$/$truecrypt$ text format.
+    # Use effective_mode so the right format is chosen after substitution.
     if not job.outfile_path:
         raise CommandBuilderError("Job has no outfile_path set.")
     from portable_crypt_recovery.services.headers.metadata import load_header_metadata
@@ -106,7 +147,7 @@ def build_command(
     except (FileNotFoundError, ValueError) as exc:
         raise CommandBuilderError(f"Cannot resolve header path: {exc}") from exc
 
-    hash_input = _header_file_for_mode(workspace_root, job.header_id, header_abs, job.hashcat_mode)
+    hash_input = _header_file_for_mode(workspace_root, job.header_id, header_abs, effective_mode)
     args.append(str(hash_input))
 
     # Potfile
