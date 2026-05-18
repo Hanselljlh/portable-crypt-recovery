@@ -86,6 +86,8 @@ class AppState:
             self.hashcat_setup.use_optimized_kernels = bool(
                 settings["use_optimized_kernels"]
             )
+        if "use_cpu_opencl" in settings:
+            self.hashcat_setup.use_cpu_opencl = bool(settings["use_cpu_opencl"])
 
 
 # Module-level singleton

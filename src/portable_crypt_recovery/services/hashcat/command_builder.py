@@ -19,6 +19,7 @@ def build_command(
     hashcat_executable: Path,
     workspace_root: Path,
     use_optimized_kernels: bool = True,
+    use_cpu_opencl: bool = False,
 ) -> list[str]:
     """Build a Hashcat argument array for a QueuedJob.
 
@@ -75,13 +76,20 @@ def build_command(
     # driver errors on headless / virtual machines.
     args += ["--hwmon-disable"]
 
+    # CPU OpenCL backend: -D 1 tells hashcat to use the OpenCL CPU device type
+    # instead of its built-in pure-CPU path. Requires the Intel or AMD OpenCL
+    # runtime to be installed; can be 3-5× faster than the default CPU backend.
+    if use_cpu_opencl:
+        args += ["-D", "1"]
+
     # Limit wordlist segment size to cap RAM usage.
     # Hashcat default loads the whole wordlist into RAM; 512 MB is a safe ceiling
     # that still allows good throughput while keeping memory pressure manageable.
     args += ["--segment-size", "512"]
 
-    # Status output
-    args += ["--status", "--status-json"]
+    # Status output — timer=1 gives a fresh line every second so the log
+    # shows real-time H/s without waiting for the default 10-second interval.
+    args += ["--status", "--status-json", "--status-timer", "1"]
 
     # Device selection
     if job.pim_set_id is not None:
@@ -130,9 +138,14 @@ def build_command_with_devices(
     workspace_root: Path,
     device_ids: list[int] | None = None,
     use_optimized_kernels: bool = True,
+    use_cpu_opencl: bool = False,
 ) -> list[str]:
     """Build command array, appending -d device args if device_ids is specified."""
-    args = build_command(job, hashcat_executable, workspace_root, use_optimized_kernels)
+    args = build_command(
+        job, hashcat_executable, workspace_root,
+        use_optimized_kernels=use_optimized_kernels,
+        use_cpu_opencl=use_cpu_opencl,
+    )
     if device_ids:
         args += ["-d", ",".join(str(d) for d in device_ids)]
     return args

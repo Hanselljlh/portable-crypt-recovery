@@ -280,6 +280,20 @@ class SettingsView:  # pragma: no cover
                     "Uncheck if you believe the password exceeds 31 characters."
                 )
                 hc_layout.addWidget(self.chk_optimized_kernels)
+
+                self.chk_cpu_opencl = QCheckBox(
+                    "CPU OpenCL  (-D 1)  —  3-5× faster on CPU; requires Intel or AMD OpenCL runtime"
+                )
+                self.chk_cpu_opencl.setChecked(False)
+                self.chk_cpu_opencl.setToolTip(
+                    "Adds -D 1 so hashcat uses the OpenCL CPU backend instead of its\n"
+                    "built-in pure-CPU path. Can be 3-5× faster when the Intel OpenCL\n"
+                    "Runtime or AMD APP SDK is installed.\n\n"
+                    "Leave OFF if you have not installed a CPU OpenCL runtime — hashcat\n"
+                    "will error on startup if the runtime is missing."
+                )
+                hc_layout.addWidget(self.chk_cpu_opencl)
+
                 self.btn_save_hc_perf = QPushButton("Save Performance Settings")
                 hc_layout.addWidget(self.btn_save_hc_perf)
 
@@ -367,6 +381,7 @@ class SettingsView:  # pragma: no cover
                         f"Selected devices: {', '.join(str(d) for d in hc.selected_device_ids)}"
                     )
                 self.chk_optimized_kernels.setChecked(hc.use_optimized_kernels)
+                self.chk_cpu_opencl.setChecked(hc.use_cpu_opencl)
                 if state.workspace_root:
                     self.lbl_ws_info.setText(
                         f"{state.workspace_name}\n{state.workspace_root}"
@@ -385,6 +400,7 @@ class SettingsView:  # pragma: no cover
                 state = self._state()
                 hc = state.hashcat_setup
                 hc.use_optimized_kernels = self.chk_optimized_kernels.isChecked()
+                hc.use_cpu_opencl = self.chk_cpu_opencl.isChecked()
                 if state.workspace_root:
                     settings_path = state.workspace_root / "settings.json"
                     try:
@@ -392,12 +408,15 @@ class SettingsView:  # pragma: no cover
                     except Exception:
                         data = {"schema_version": 1}
                     data["use_optimized_kernels"] = hc.use_optimized_kernels
+                    data["use_cpu_opencl"] = hc.use_cpu_opencl
                     from portable_crypt_recovery.core.atomic_write import atomic_write_json
                     atomic_write_json(settings_path, data)
                 flag = "ON  (-O active)" if hc.use_optimized_kernels else "OFF (no -O, max password length unlimited)"
+                cpu_flag = "ON  (-D 1 active)" if hc.use_cpu_opencl else "OFF"
                 QMessageBox.information(
                     self, "Saved",
-                    f"Optimized kernels: {flag}\n\n"
+                    f"Optimized kernels: {flag}\n"
+                    f"CPU OpenCL: {cpu_flag}\n\n"
                     "Takes effect on the next Start Queue."
                 )
 
@@ -418,6 +437,7 @@ class SettingsView:  # pragma: no cover
                 data["hashcat_version"] = hc.version_string
                 data["selected_device_ids"] = hc.selected_device_ids
                 data["use_optimized_kernels"] = hc.use_optimized_kernels
+                data["use_cpu_opencl"] = hc.use_cpu_opencl
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 atomic_write_json(settings_path, data)
 
