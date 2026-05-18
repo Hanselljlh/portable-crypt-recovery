@@ -103,7 +103,10 @@ def build_command(
             "--veracrypt-pim-stop", str(job.pim_value),
         ]
 
-    # Keyfile handling — workspace-local keyfiles only
+    # Keyfile handling — workspace-local keyfiles only.
+    # Hashcat uses --veracrypt-keyfiles (VeraCrypt modes 13711-13783, 29411-29483)
+    # and --truecrypt-keyfiles (TrueCrypt modes 6211-6243, 29311-29343).
+    # Both flags accept a comma-separated list; do NOT pass --keyfile (unknown option).
     if job.keyfile_set_id:
         from portable_crypt_recovery.models.keyfile_set import KeyfileSet
         kf_set_path = workspace_root / "generated" / "keyfile-lists" / f"{job.keyfile_set_id}.json"
@@ -112,9 +115,15 @@ def build_command(
             with kf_set_path.open("r", encoding="utf-8") as fh:
                 kf_data = json.load(fh)
             kf_set = KeyfileSet.from_dict(kf_data)
-            for entry in kf_set.entries:
-                kf_abs = safe_join_workspace(workspace_root, entry.normalized_workspace_path)
-                args += ["--keyfile", str(kf_abs)]
+            kf_paths = [
+                str(safe_join_workspace(workspace_root, entry.normalized_workspace_path))
+                for entry in kf_set.entries
+            ]
+            if kf_paths:
+                mode = job.hashcat_mode
+                is_truecrypt = (6211 <= mode <= 6243) or (29311 <= mode <= 29343)
+                kf_flag = "--truecrypt-keyfiles" if is_truecrypt else "--veracrypt-keyfiles"
+                args += [kf_flag, ",".join(kf_paths)]
 
     # Wordlist (dictionary) — must come last, positional after the hash file
     if not job.wordlist_path:

@@ -222,3 +222,85 @@ def test_command_fails_missing_executable(tmp_path):
 
     with pytest.raises(CommandBuilderError):
         build_command(job, tmp_path / "nonexistent_hashcat", ws)
+
+
+def _make_keyfile_set(ws: Path, set_id: str, filenames: list[str]) -> None:
+    """Write a minimal keyfile-list JSON and the dummy keyfile files."""
+    import json
+
+    kf_dir = ws / "inputs" / "keyfiles" / "normalized"
+    kf_dir.mkdir(parents=True, exist_ok=True)
+    kf_list_dir = ws / "generated" / "keyfile-lists"
+    kf_list_dir.mkdir(parents=True, exist_ok=True)
+
+    entries = []
+    for fn in filenames:
+        rel = f"inputs/keyfiles/normalized/{fn}"
+        (ws / rel).write_bytes(b"\x00" * 64)
+        entries.append({
+            "keyfile_id": fn.split(".")[0],
+            "original_filename": fn,
+            "size_bytes": 64,
+            "normalized_workspace_path": rel,
+            "sha256": "a" * 64,
+        })
+    kf_list_dir.joinpath(f"{set_id}.json").write_text(
+        json.dumps({"set_id": set_id, "entries": entries}), encoding="utf-8"
+    )
+
+
+def _fake_exe(tmp_path: Path) -> Path:
+    if os.name == "nt":
+        exe = tmp_path / "hashcat.cmd"
+        exe.write_text("@echo off\nexit /b 0\n")
+    else:
+        exe = tmp_path / "hashcat"
+        exe.write_text("#!/bin/sh\nexit 0\n")
+        exe.chmod(0o755)
+    return exe
+
+
+def test_veracrypt_mode_uses_veracrypt_keyfiles_flag(tmp_path):
+    """VeraCrypt modes must use --veracrypt-keyfiles, never --keyfile."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 13712  # VeraCrypt legacy
+    job.keyfile_set_id = "kfset_vc"
+    _make_keyfile_set(ws, "kfset_vc", ["key1.png"])
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    assert "--veracrypt-keyfiles" in args
+    assert "--truecrypt-keyfiles" not in args
+    assert "--keyfile" not in args
+
+
+def test_truecrypt_mode_uses_truecrypt_keyfiles_flag(tmp_path):
+    """TrueCrypt modes must use --truecrypt-keyfiles, never --keyfile."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 6211  # TrueCrypt legacy
+    job.keyfile_set_id = "kfset_tc"
+    _make_keyfile_set(ws, "kfset_tc", ["key1.png"])
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    assert "--truecrypt-keyfiles" in args
+    assert "--veracrypt-keyfiles" not in args
+    assert "--keyfile" not in args
+
+
+def test_multiple_keyfiles_joined_as_single_arg(tmp_path):
+    """Multiple keyfiles must be comma-joined in one flag, not repeated --keyfile pairs."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29411  # VeraCrypt current
+    job.keyfile_set_id = "kfset_multi"
+    _make_keyfile_set(ws, "kfset_multi", ["kf_a.png", "kf_b.txt"])
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    flag_idx = args.index("--veracrypt-keyfiles")
+    kf_value = args[flag_idx + 1]
+    assert "," in kf_value, "Multiple keyfiles must be comma-joined in a single value"
+    assert "--keyfile" not in args
