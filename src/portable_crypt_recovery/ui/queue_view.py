@@ -23,9 +23,10 @@ class QueueView:  # pragma: no cover
             def __init__(self) -> None:
                 super().__init__()
                 self._runner = None      # active QueueRunner or None
-                self._job_list_follow = True   # auto-scroll job list to running job
+                self._job_list_follow = False  # auto-scroll job list to running job
                 self._log_follow = True        # auto-scroll log to bottom for live job
                 self._log_job_id = ""          # job ID currently displayed in log panel
+                self._collapsed_drafts: set[str] = set()  # draft IDs whose rows are hidden
                 layout = QVBoxLayout(self)
 
                 # Queue controls
@@ -108,6 +109,7 @@ class QueueView:  # pragma: no cover
                 self.btn_clear_queue.clicked.connect(self._clear_queue)
                 self.btn_copy_cmd.clicked.connect(self._copy_command)
                 self.job_list.currentItemChanged.connect(self._on_job_selected)
+                self.job_list.itemClicked.connect(self._on_job_list_item_clicked)
 
                 # Poll timer
                 self._timer = QTimer(self)
@@ -146,20 +148,40 @@ class QueueView:  # pragma: no cover
                 self._job_list_follow = False
 
             def _on_job_list_scroll_changed(self, value: int) -> None:
-                """Re-enable follow when user scrolls back to the bottom of the job list."""
+                """Update follow flag when user scrolls the job list.
+
+                Only fires for user-initiated scrolls; programmatic scrolls
+                block signals around setValue so this handler is not called.
+                """
                 sb = self.job_list.verticalScrollBar()
-                if value >= sb.maximum():
-                    self._job_list_follow = True
+                if sb.maximum() == 0:
+                    return  # list fits on screen; follow state not meaningful
+                self._job_list_follow = value >= sb.maximum()
 
             def _on_log_slider_pressed(self) -> None:
                 """User grabbed the log scrollbar — stop auto-scrolling the log."""
                 self._log_follow = False
 
             def _on_log_scroll_changed(self, value: int) -> None:
-                """Re-enable log follow when user scrolls back to the bottom."""
+                """Update log follow flag based on user scroll position.
+
+                Only fires for user-initiated scrolls; programmatic scrolls
+                block signals around setValue so this handler is not called.
+                """
                 sb = self.txt_log.verticalScrollBar()
-                if value >= sb.maximum():
-                    self._log_follow = True
+                if sb.maximum() == 0:
+                    return  # content fits on screen; follow state not meaningful
+                self._log_follow = value >= sb.maximum()
+
+            def _on_job_list_item_clicked(self, item) -> None:
+                """Toggle expand/collapse when user clicks a group header row."""
+                draft_id = item.data(257)   # group-header rows store draft_id here
+                if draft_id is not None:
+                    if draft_id in self._collapsed_drafts:
+                        self._collapsed_drafts.discard(draft_id)
+                    else:
+                        self._collapsed_drafts.add(draft_id)
+                    self._refresh_list()
 
             # ------------------------------------------------------------------
             # Start
@@ -558,6 +580,13 @@ class QueueView:  # pragma: no cover
                     # User clicked a different job — reset follow state
                     self._log_follow = True
 
+                # Terminal jobs never gain new log content after finishing, so
+                # there is nothing to refresh on a poll tick.  Skip the reload
+                # entirely so the user's scroll position is undisturbed.
+                _TERMINAL = {"cracked", "exhausted", "failed", "skipped", "aborted"}
+                if not is_new_job and job.status in _TERMINAL:
+                    return
+
                 # Save scroll position before setPlainText wipes it
                 log_sb = self.txt_log.verticalScrollBar()
                 saved_log_pos = log_sb.value()
@@ -633,12 +662,16 @@ class QueueView:  # pragma: no cover
                         f"(no log file at {log_abs})"
                     )
 
+                # Block scrollbar signals around setPlainText + scroll positioning
+                # so the internal Qt scroll-reset doesn't accidentally flip
+                # _log_follow.  Only user-initiated wheel/drag events (which
+                # arrive outside this block) should change follow state.
+                log_sb.blockSignals(True)
                 self.txt_log.setPlainText("\n".join(lines))
                 # setPlainText resets scroll to 0; apply smart scroll:
                 # - New job selected: scroll per status and (re-)enable following
                 # - Same job, following enabled: scroll per status
                 # - Same job, user scrolled away: restore their previous position
-                log_sb = self.txt_log.verticalScrollBar()
                 if is_new_job or self._log_follow:
                     if job.status == "cracked":
                         log_sb.setValue(0)
@@ -648,6 +681,7 @@ class QueueView:  # pragma: no cover
                     # Restore user's reading position (content may have grown,
                     # so clamp to new maximum just in case)
                     log_sb.setValue(min(saved_log_pos, log_sb.maximum()))
+                log_sb.blockSignals(False)
 
             # ------------------------------------------------------------------
             # Polling / Refresh
@@ -770,7 +804,7 @@ class QueueView:  # pragma: no cover
                         draft_status_counts[did].get(job.status, 0) + 1
                     )
 
-                # --- Render: separator header then jobs for each draft ---
+                # --- Render: group header then (optionally) jobs for each draft ---
                 for draft_id, draft_label in seen_drafts:
                     # Count jobs and build a short status summary
                     sc = draft_status_counts.get(draft_id, {})
@@ -783,11 +817,21 @@ class QueueView:  # pragma: no cover
                             parts.append(f"{n} {st}")
                     summary = "  ·  ".join(parts) if parts else "0 jobs"
 
-                    sep = QListWidgetItem(f"▶  {draft_label}  ({total} jobs: {summary})")
-                    sep.setFlags(Qt.ItemFlag.NoItemFlags)   # not selectable
+                    is_collapsed = draft_id in self._collapsed_drafts
+                    triangle = "▶" if is_collapsed else "▼"
+                    sep = QListWidgetItem(
+                        f"{triangle}  {draft_label}  ({total} jobs: {summary})"
+                    )
+                    # ItemIsEnabled makes it clickable (for toggle) but not
+                    # selectable as a regular job row.
+                    sep.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                    sep.setData(257, draft_id)   # mark as group header
                     sep.setBackground(QBrush(QColor("#1e2a3a")))
                     sep.setForeground(QBrush(QColor("#88b8e8")))
                     self.job_list.addItem(sep)
+
+                    if is_collapsed:
+                        continue   # children hidden; skip child rows
 
                     for job_id in qs.queue_order:
                         job = qs.jobs.get(job_id)
@@ -815,27 +859,34 @@ class QueueView:  # pragma: no cover
 
                 # Auto-scroll: jump to running job only when following;
                 # otherwise restore the user's previous scroll position.
+                # Block signals so setValue doesn't flip _job_list_follow.
                 running_item = None
                 for i in range(self.job_list.count()):
                     it = self.job_list.item(i)
                     if it and it.data(256) == qs.current_running_job:
                         running_item = it
                         break
+                jsb = self.job_list.verticalScrollBar()
+                jsb.blockSignals(True)
                 if running_item and self._job_list_follow:
                     from PySide6.QtWidgets import QAbstractItemView
                     self.job_list.scrollToItem(
                         running_item, QAbstractItemView.ScrollHint.EnsureVisible
                     )
                 else:
-                    self.job_list.verticalScrollBar().setValue(scroll_pos)
+                    jsb.setValue(scroll_pos)
+                jsb.blockSignals(False)
 
-                # --- Jobs remaining counter ---
+                # --- Progress bar + jobs remaining counter ---
                 total_jobs = len(qs.queue_order)
                 pending_jobs = sum(
                     1 for jid in qs.queue_order
                     if qs.jobs.get(jid) and qs.jobs[jid].status in ("pending", "running")
                 )
                 done_jobs = total_jobs - pending_jobs
+                self.progress_bar.setValue(
+                    int(done_jobs * 100 / total_jobs) if total_jobs > 0 else 0
+                )
                 if total_jobs > 0:
                     remaining_text = (
                         f"{pending_jobs} remaining  /  {total_jobs} total"
