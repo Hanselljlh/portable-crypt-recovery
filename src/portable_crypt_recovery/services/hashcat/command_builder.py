@@ -14,12 +14,68 @@ class CommandBuilderError(Exception):
     pass
 
 
+# ---------------------------------------------------------------------------
+# Hash-input format helpers
+# ---------------------------------------------------------------------------
+
+def _header_file_for_mode(
+    workspace_root: Path,
+    header_id: str,
+    header_abs: Path,
+    mode: int,
+) -> Path:
+    """Return the appropriate hash-input file path for the given hashcat mode.
+
+    Legacy modes (137xx, 62xx) accept a raw 512-byte binary header.
+    Current modes (293xx, 294xx) require a text-format hash:
+      $veracrypt$<64-byte-salt-hex>$<448-byte-encrypted-hex>
+      $truecrypt$<64-byte-salt-hex>$<448-byte-encrypted-hex>
+
+    The text file is derived from the same binary header and cached in
+    headers/vc_hash/ inside the workspace so it only needs to be generated once.
+    """
+    is_vc_current = 29411 <= mode <= 29483
+    is_tc_current = 29311 <= mode <= 29343
+
+    if not (is_vc_current or is_tc_current):
+        # Legacy modes (137xx / 62xx) — raw binary, no conversion needed.
+        return header_abs
+
+    prefix = "$veracrypt$" if is_vc_current else "$truecrypt$"
+    suffix = "veracrypt" if is_vc_current else "truecrypt"
+
+    vc_hash_dir = workspace_root / "headers" / "vc_hash"
+    vc_hash_dir.mkdir(parents=True, exist_ok=True)
+    text_file = vc_hash_dir / f"header_{header_id}_{suffix}.txt"
+
+    if not text_file.exists():
+        raw = header_abs.read_bytes()
+        if len(raw) != 512:
+            raise CommandBuilderError(
+                f"Header must be exactly 512 bytes (got {len(raw)}): {header_abs}"
+            )
+        # VeraCrypt/TrueCrypt header layout:
+        #   bytes   0–63  : random salt  (64 bytes)
+        #   bytes  64–511 : encrypted header area (448 bytes)
+        text_file.write_text(
+            f"{prefix}{raw[:64].hex()}${raw[64:].hex()}\n",
+            encoding="ascii",
+        )
+
+    return text_file
+
+
+# ---------------------------------------------------------------------------
+# Command builders
+# ---------------------------------------------------------------------------
+
 def build_command(
     job: QueuedJob,
     hashcat_executable: Path,
     workspace_root: Path,
     use_optimized_kernels: bool = True,
     use_cpu_opencl: bool = False,
+    ignore_cuda: bool = False,
 ) -> list[str]:
     """Build a Hashcat argument array for a QueuedJob.
 
@@ -39,7 +95,8 @@ def build_command(
     # Hash mode
     args += ["-m", str(job.hashcat_mode)]
 
-    # Hash input: 512-byte normalized header
+    # Hash input — legacy modes (137xx, 62xx) use raw binary; current modes
+    # (293xx, 294xx) require $veracrypt$/$truecrypt$ text format.
     if not job.outfile_path:
         raise CommandBuilderError("Job has no outfile_path set.")
     from portable_crypt_recovery.services.headers.metadata import load_header_metadata
@@ -49,7 +106,8 @@ def build_command(
     except (FileNotFoundError, ValueError) as exc:
         raise CommandBuilderError(f"Cannot resolve header path: {exc}") from exc
 
-    args.append(str(header_abs))
+    hash_input = _header_file_for_mode(workspace_root, job.header_id, header_abs, job.hashcat_mode)
+    args.append(str(hash_input))
 
     # Potfile
     potfile_abs = safe_join_workspace(workspace_root, job.potfile_path)
@@ -76,9 +134,14 @@ def build_command(
     # driver errors on headless / virtual machines.
     args += ["--hwmon-disable"]
 
-    # CPU OpenCL backend: -D 1 tells hashcat to use the OpenCL CPU device type
-    # instead of its built-in pure-CPU path. Requires the Intel or AMD OpenCL
-    # runtime to be installed; can be 3-5× faster than the default CPU backend.
+    # Backend flags — mutually exclusive with each other.
+    # ignore_cuda: skip CUDA backend entirely; hashcat falls back to OpenCL or
+    #   the built-in CPU backend.  Use when CUDA PTX version mismatch causes
+    #   "Unsupported .version X.Y; current version is A.B" errors.
+    # use_cpu_opencl: use OpenCL CPU device type (-D 1); requires Intel or AMD
+    #   OpenCL runtime; 3-5× faster than built-in CPU.
+    if ignore_cuda:
+        args += ["--backend-ignore-cuda"]
     if use_cpu_opencl:
         args += ["-D", "1"]
 
@@ -90,11 +153,6 @@ def build_command(
     # Status output — timer=1 gives a fresh line every second so the log
     # shows real-time H/s without waiting for the default 10-second interval.
     args += ["--status", "--status-json", "--status-timer", "1"]
-
-    # Device selection
-    if job.pim_set_id is not None:
-        # device args come from hashcat_setup; not available here — callers should inject
-        pass
 
     # PIM handling
     if job.pim_mode == "custom" and job.pim_value is not None:
@@ -148,12 +206,14 @@ def build_command_with_devices(
     device_ids: list[int] | None = None,
     use_optimized_kernels: bool = True,
     use_cpu_opencl: bool = False,
+    ignore_cuda: bool = False,
 ) -> list[str]:
     """Build command array, appending -d device args if device_ids is specified."""
     args = build_command(
         job, hashcat_executable, workspace_root,
         use_optimized_kernels=use_optimized_kernels,
         use_cpu_opencl=use_cpu_opencl,
+        ignore_cuda=ignore_cuda,
     )
     if device_ids:
         args += ["-d", ",".join(str(d) for d in device_ids)]

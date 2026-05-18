@@ -88,6 +88,8 @@ class AppState:
             )
         if "use_cpu_opencl" in settings:
             self.hashcat_setup.use_cpu_opencl = bool(settings["use_cpu_opencl"])
+        if "ignore_cuda" in settings:
+            self.hashcat_setup.ignore_cuda = bool(settings["ignore_cuda"])
 
 
 # Module-level singleton

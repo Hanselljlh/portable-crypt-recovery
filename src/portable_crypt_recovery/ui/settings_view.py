@@ -294,6 +294,21 @@ class SettingsView:  # pragma: no cover
                 )
                 hc_layout.addWidget(self.chk_cpu_opencl)
 
+                self.chk_ignore_cuda = QCheckBox(
+                    "Ignore CUDA  (--backend-ignore-cuda)  —  skip CUDA; fall back to CPU"
+                )
+                self.chk_ignore_cuda.setChecked(False)
+                self.chk_ignore_cuda.setToolTip(
+                    "Adds --backend-ignore-cuda so hashcat skips the CUDA backend\n"
+                    "entirely and falls back to OpenCL or the built-in CPU backend.\n\n"
+                    "Enable this if you see:\n"
+                    "  'Unsupported .version X.Y; current version is A.B'\n"
+                    "in your job logs. This error means your NVIDIA driver is too old\n"
+                    "for this version of hashcat (driver 570+ required for hashcat 7.x).\n\n"
+                    "Jobs will run on CPU — much slower, but correct results."
+                )
+                hc_layout.addWidget(self.chk_ignore_cuda)
+
                 self.btn_save_hc_perf = QPushButton("Save Performance Settings")
                 hc_layout.addWidget(self.btn_save_hc_perf)
 
@@ -382,6 +397,7 @@ class SettingsView:  # pragma: no cover
                     )
                 self.chk_optimized_kernels.setChecked(hc.use_optimized_kernels)
                 self.chk_cpu_opencl.setChecked(hc.use_cpu_opencl)
+                self.chk_ignore_cuda.setChecked(hc.ignore_cuda)
                 if state.workspace_root:
                     self.lbl_ws_info.setText(
                         f"{state.workspace_name}\n{state.workspace_root}"
@@ -401,6 +417,7 @@ class SettingsView:  # pragma: no cover
                 hc = state.hashcat_setup
                 hc.use_optimized_kernels = self.chk_optimized_kernels.isChecked()
                 hc.use_cpu_opencl = self.chk_cpu_opencl.isChecked()
+                hc.ignore_cuda = self.chk_ignore_cuda.isChecked()
                 if state.workspace_root:
                     settings_path = state.workspace_root / "settings.json"
                     try:
@@ -409,14 +426,17 @@ class SettingsView:  # pragma: no cover
                         data = {"schema_version": 1}
                     data["use_optimized_kernels"] = hc.use_optimized_kernels
                     data["use_cpu_opencl"] = hc.use_cpu_opencl
+                    data["ignore_cuda"] = hc.ignore_cuda
                     from portable_crypt_recovery.core.atomic_write import atomic_write_json
                     atomic_write_json(settings_path, data)
                 flag = "ON  (-O active)" if hc.use_optimized_kernels else "OFF (no -O, max password length unlimited)"
                 cpu_flag = "ON  (-D 1 active)" if hc.use_cpu_opencl else "OFF"
+                cuda_flag = "ON  (--backend-ignore-cuda active)" if hc.ignore_cuda else "OFF"
                 QMessageBox.information(
                     self, "Saved",
                     f"Optimized kernels: {flag}\n"
-                    f"CPU OpenCL: {cpu_flag}\n\n"
+                    f"CPU OpenCL: {cpu_flag}\n"
+                    f"Ignore CUDA: {cuda_flag}\n\n"
                     "Takes effect on the next Start Queue."
                 )
 
@@ -438,6 +458,7 @@ class SettingsView:  # pragma: no cover
                 data["selected_device_ids"] = hc.selected_device_ids
                 data["use_optimized_kernels"] = hc.use_optimized_kernels
                 data["use_cpu_opencl"] = hc.use_cpu_opencl
+                data["ignore_cuda"] = hc.ignore_cuda
                 from portable_crypt_recovery.core.atomic_write import atomic_write_json
                 atomic_write_json(settings_path, data)
 

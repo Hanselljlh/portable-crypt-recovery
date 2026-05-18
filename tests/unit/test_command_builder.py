@@ -304,3 +304,100 @@ def test_multiple_keyfiles_joined_as_single_arg(tmp_path):
     kf_value = args[flag_idx + 1]
     assert "," in kf_value, "Multiple keyfiles must be comma-joined in a single value"
     assert "--keyfile" not in args
+
+
+# ---------------------------------------------------------------------------
+# Hash-input format: 293xx / 294xx modes need $veracrypt$/$truecrypt$ text
+# ---------------------------------------------------------------------------
+
+def _write_dummy_binary_header(ws: Path, header_id: str) -> Path:
+    """Write a recognisable 512-byte binary header to the normalised dir."""
+    p = ws / "headers" / "normalized" / f"header_{header_id}.bin"
+    # Make it non-zero so hex output is interesting; embed 3 newlines (0x0a)
+    # so we can confirm it's not mistakenly treated as multiple text lines.
+    data = bytes(range(256)) * 2  # 512 bytes, deterministic
+    p.write_bytes(data)
+    return p
+
+
+def test_legacy_vc_mode_uses_raw_binary_header(tmp_path):
+    """137xx modes must receive the raw .bin file, not a text-format hash."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 13711  # VeraCrypt legacy
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    hash_input = args[5]  # exe, -a, 0, -m, MODE, <hash_input>
+    assert hash_input.endswith(".bin"), f"Legacy mode should use raw .bin, got: {hash_input}"
+    assert "vc_hash" not in hash_input
+
+
+def test_current_vc_mode_generates_veracrypt_text_file(tmp_path):
+    """294xx modes must receive a $veracrypt$salt$encrypted text file."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29411  # VeraCrypt current
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    hash_input = args[5]  # exe, -a, 0, -m, MODE, <hash_input>
+    assert hash_input.endswith(".txt"), f"294xx mode should use .txt hash file, got: {hash_input}"
+    assert "vc_hash" in hash_input
+
+    content = Path(hash_input).read_text(encoding="ascii").strip()
+    assert content.startswith("$veracrypt$"), f"Expected $veracrypt$ prefix, got: {content[:30]}"
+    parts = content.split("$")
+    # format: '' | 'veracrypt' | salt_hex (128 chars) | enc_hex (896 chars)
+    assert len(parts) == 4
+    assert len(parts[2]) == 128, f"Salt hex should be 128 chars, got {len(parts[2])}"
+    assert len(parts[3]) == 896, f"Encrypted hex should be 896 chars, got {len(parts[3])}"
+
+
+def test_current_tc_mode_generates_truecrypt_text_file(tmp_path):
+    """293xx modes must receive a $truecrypt$salt$encrypted text file."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29311  # TrueCrypt current
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    hash_input = args[5]  # exe, -a, 0, -m, MODE, <hash_input>
+    assert hash_input.endswith(".txt")
+    content = Path(hash_input).read_text(encoding="ascii").strip()
+    assert content.startswith("$truecrypt$"), f"Expected $truecrypt$ prefix, got: {content[:30]}"
+
+
+def test_vc_hash_file_is_cached(tmp_path):
+    """Calling build_command twice for the same job should reuse the same text file."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29411
+
+    args1 = build_command(job, _fake_exe(tmp_path), ws)
+    args2 = build_command(job, _fake_exe(tmp_path), ws)
+    assert args1[3] == args2[3], "Hash file path should be identical on second call"
+    vc_hash_dir = ws / "headers" / "vc_hash"
+    files = list(vc_hash_dir.iterdir())
+    assert len(files) == 1, f"Only one cached text file should exist, found: {files}"
+
+
+def test_ignore_cuda_flag_added(tmp_path):
+    """ignore_cuda=True must add --backend-ignore-cuda to the command."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+
+    args = build_command(job, _fake_exe(tmp_path), ws, ignore_cuda=True)
+    assert "--backend-ignore-cuda" in args
+
+
+def test_ignore_cuda_off_by_default(tmp_path):
+    """--backend-ignore-cuda must NOT appear when ignore_cuda is False."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    assert "--backend-ignore-cuda" not in args
