@@ -8,13 +8,13 @@ from pathlib import Path
 
 from portable_crypt_recovery.core.atomic_write import atomic_write_json
 from portable_crypt_recovery.core.timestamps import utc_now_iso
-from portable_crypt_recovery.models.job import QueuedJob
 from portable_crypt_recovery.models.report import Report
+from portable_crypt_recovery.models.task import QueuedTask
 
 
 def assemble_cracked_package(
     workspace_root: Path,
-    job: QueuedJob,
+    job: QueuedTask,
     report: Report,
     cracked_password: str,
     run_id: str,
@@ -23,7 +23,7 @@ def assemble_cracked_package(
 
     Returns the package folder path.
     """
-    pkg_dir = workspace_root / "reports" / "cracked" / f"job_{job.job_id}_run_{run_id}"
+    pkg_dir = workspace_root / "reports" / "cracked" / f"task_{job.task_id}_run_{run_id}"
     pkg_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy normalized header
@@ -59,7 +59,7 @@ def assemble_cracked_package(
     manifest_data = {
         "schema_version": 1,
         "created_timestamp": utc_now_iso(),
-        "job_id": job.job_id,
+        "job_id": job.task_id,
         "report_id": report.report_id,
         "hashcat_mode": job.hashcat_mode,
         "pim_mode": job.pim_mode,

@@ -5,7 +5,7 @@ import json
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.timestamps import utc_now_iso
 from portable_crypt_recovery.models.header import Header
-from portable_crypt_recovery.models.job import QueuedJob
+from portable_crypt_recovery.models.task import QueuedTask
 from portable_crypt_recovery.services.headers.metadata import save_header_metadata
 from portable_crypt_recovery.services.reports.report_generator import generate_cracked_report
 from portable_crypt_recovery.workspace.workspace_manager import create_workspace
@@ -34,10 +34,10 @@ def _make_header(ws_root):
 
 
 def _make_cracked_job(header, ws_root):
-    job_id = new_id("job")
-    session = f"pcr_{job_id}"
-    return QueuedJob(
-        job_id=job_id,
+    task_id = new_id("task")
+    session = f"pcr_{task_id}"
+    return QueuedTask(
+        task_id=task_id,
         target_id="target_001",
         header_id=header.header_id,
         hash_mode_set_id="modeset_001",
@@ -72,7 +72,7 @@ def test_generate_cracked_report_creates_files(tmp_path):
     )
 
     assert report.report_id.startswith("report_")
-    assert report.job_id == job.job_id
+    assert report.job_id == job.task_id
     assert report.cracked_password == "S3cr3tP@ss!"
 
     # Check report folder was created
@@ -90,7 +90,7 @@ def test_generate_cracked_report_creates_files(tmp_path):
     # Verify JSON structure
     result_json = json.loads((pkg_dir / "recovered-result.json").read_text())
     assert result_json["cracked_password"] == "S3cr3tP@ss!"
-    assert result_json["job_id"] == job.job_id
+    assert result_json["job_id"] == job.task_id
     assert result_json["schema_version"] == 1
 
 

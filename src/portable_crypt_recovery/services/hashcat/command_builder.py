@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from portable_crypt_recovery.models.job import QueuedJob
+from portable_crypt_recovery.models.task import QueuedTask
 
 
 class CommandBuilderError(Exception):
@@ -102,14 +102,14 @@ def _header_file_for_mode(
 # ---------------------------------------------------------------------------
 
 def build_command(
-    job: QueuedJob,
+    job: QueuedTask,
     hashcat_executable: Path,
     workspace_root: Path,
     use_optimized_kernels: bool = True,
     use_cpu_opencl: bool = False,
     ignore_cuda: bool = False,
 ) -> list[str]:
-    """Build a Hashcat argument array for a QueuedJob.
+    """Build a Hashcat argument array for a QueuedTask.
 
     All paths are validated to be inside the workspace.
     Returns list[str] — safe for subprocess.Popen(args, ...).
@@ -246,7 +246,7 @@ def build_command(
 
 
 def build_command_with_devices(
-    job: QueuedJob,
+    job: QueuedTask,
     hashcat_executable: Path,
     workspace_root: Path,
     device_ids: list[int] | None = None,

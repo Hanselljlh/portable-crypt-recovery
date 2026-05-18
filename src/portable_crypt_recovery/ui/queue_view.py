@@ -1,10 +1,10 @@
-"""Queue view — list of queued jobs and queue controls."""
+"""Queue view — list of queued tasks and queue controls."""
 
 from __future__ import annotations
 
 
 class QueueView:  # pragma: no cover
-    """Queued job list with Start/Pause/Stop/Resume/Skip/Restart controls."""
+    """Queued task list with Start/Pause/Stop/Resume/Skip/Restart controls."""
 
     def __new__(cls):
         from PySide6.QtCore import QTimer
@@ -23,9 +23,9 @@ class QueueView:  # pragma: no cover
             def __init__(self) -> None:
                 super().__init__()
                 self._runner = None      # active QueueRunner or None
-                self._job_list_follow = False  # auto-scroll job list to running job
-                self._log_follow = True        # auto-scroll log to bottom for live job
-                self._log_job_id = ""          # job ID currently displayed in log panel
+                self._job_list_follow = False  # auto-scroll task list to running task
+                self._log_follow = True        # auto-scroll log to bottom for live task
+                self._log_task_id = ""         # task ID currently displayed in log panel
                 self._collapsed_drafts: set[str] = set()  # draft IDs whose rows are hidden
                 layout = QVBoxLayout(self)
 
@@ -53,7 +53,7 @@ class QueueView:  # pragma: no cover
 
                 # Status row
                 self.lbl_status = QLabel("Queue stopped")
-                self.lbl_running = QLabel("No job running")
+                self.lbl_running = QLabel("No task running")
                 self.lbl_remaining = QLabel("")
                 self.progress_bar = QProgressBar()
                 self.progress_bar.setRange(0, 100)
@@ -82,7 +82,7 @@ class QueueView:  # pragma: no cover
                 log_widget = QWidget()
                 log_layout = QVBoxLayout(log_widget)
                 log_layout.setContentsMargins(0, 4, 0, 0)
-                self.lbl_log_header = QLabel("Select a job to view its log")
+                self.lbl_log_header = QLabel("Select a task to view its log")
                 self.lbl_log_header.setStyleSheet("color: gray; font-size: 11px;")
                 log_layout.addWidget(self.lbl_log_header)
                 self.txt_log = QPlainTextEdit()
@@ -226,23 +226,23 @@ class QueueView:  # pragma: no cover
                         json.loads(queue_file.read_text(encoding="utf-8"))
                     )
                 except Exception:
-                    QMessageBox.warning(self, "No Jobs", "No jobs in queue. Create drafts and expand them first.")
+                    QMessageBox.warning(self, "No Tasks", "No tasks in queue. Create drafts and expand them first.")
                     return
 
                 pending = [
-                    qs.jobs[jid]
-                    for jid in qs.queue_order
-                    if jid in qs.jobs and qs.jobs[jid].status == "pending"
+                    qs.tasks[tid]
+                    for tid in qs.task_order
+                    if tid in qs.tasks and qs.tasks[tid].status == "pending"
                 ]
                 if not pending:
-                    QMessageBox.information(self, "Nothing to Run", "No pending jobs in queue.")
+                    QMessageBox.information(self, "Nothing to Run", "No pending tasks in queue.")
                     return
 
                 # Show busy indicator while building commands and starting the runner
                 from PySide6.QtCore import Qt
                 from PySide6.QtWidgets import QApplication, QProgressDialog
                 progress = QProgressDialog(
-                    f"Preparing {len(pending)} job(s)…", None, 0, 0, self
+                    f"Preparing {len(pending)} task(s)…", None, 0, 0, self
                 )
                 progress.setWindowTitle("Starting Queue")
                 progress.setWindowModality(Qt.WindowModality.WindowModal)
@@ -272,30 +272,30 @@ class QueueView:  # pragma: no cover
 
                 seen_header_mode: set[tuple[str, int]] = set()
                 errors: list[str] = []
-                for job in pending:
-                    eff_mode = _CURRENT_TO_LEGACY.get(job.hashcat_mode, job.hashcat_mode) \
-                        if ignore_cuda else job.hashcat_mode
-                    key = (job.header_id, eff_mode)
+                for task in pending:
+                    eff_mode = _CURRENT_TO_LEGACY.get(task.hashcat_mode, task.hashcat_mode) \
+                        if ignore_cuda else task.hashcat_mode
+                    key = (task.header_id, eff_mode)
                     if key in seen_header_mode:
-                        job.status = "skipped"
-                        job.updated_timestamp = _now()
+                        task.status = "skipped"
+                        task.updated_timestamp = _now()
                         continue
                     seen_header_mode.add(key)
                     try:
-                        job.command_array = build_command_with_devices(
-                            job, hashcat_exe, ws, device_ids,
+                        task.command_array = build_command_with_devices(
+                            task, hashcat_exe, ws, device_ids,
                             use_optimized_kernels=use_opt,
                             use_cpu_opencl=use_cpu_opencl,
                             ignore_cuda=ignore_cuda,
                         )
                     except CommandBuilderError as exc:
-                        errors.append(f"{job.job_id[:8]}: {exc}")
+                        errors.append(f"{task.task_id[:8]}: {exc}")
 
                 if errors:
                     progress.close()
                     QMessageBox.warning(
                         self, "Command Build Errors",
-                        f"{len(errors)} job(s) could not build a command:\n" + "\n".join(errors[:5])
+                        f"{len(errors)} task(s) could not build a command:\n" + "\n".join(errors[:5])
                     )
 
                 # Save updated command arrays back to disk
@@ -336,7 +336,7 @@ class QueueView:  # pragma: no cover
             def _pause_after(self) -> None:
                 if self._runner:
                     self._runner.stop_after_current()
-                    self.lbl_status.setText("Stopping after current job…")
+                    self.lbl_status.setText("Stopping after current task…")
 
             def _stop_save(self) -> None:
                 if self._runner:
@@ -359,7 +359,7 @@ class QueueView:  # pragma: no cover
                 self._timer.stop()
                 self._update_button_states("stopped")
                 self.lbl_status.setText("Queue stopped")
-                self.lbl_running.setText("No job running")
+                self.lbl_running.setText("No task running")
                 self.progress_bar.setValue(0)
                 self._refresh_list()
                 # Reset title to baseline (refresh_list will set it if jobs exist)
@@ -388,8 +388,8 @@ class QueueView:  # pragma: no cover
                 if not selected:
                     return
 
-                job_ids = [it.data(256) for it in selected if it.data(256)]
-                if not job_ids:
+                task_ids = [it.data(256) for it in selected if it.data(256)]
+                if not task_ids:
                     return
 
                 state = get_app_state()
@@ -406,12 +406,12 @@ class QueueView:  # pragma: no cover
 
                 from portable_crypt_recovery.core.timestamps import utc_now_iso
                 changed = False
-                for job_id in job_ids:
-                    if job_id in qs.jobs:
-                        qs.jobs[job_id].status = new_status
-                        qs.jobs[job_id].updated_timestamp = utc_now_iso()
+                for task_id in task_ids:
+                    if task_id in qs.tasks:
+                        qs.tasks[task_id].status = new_status
+                        qs.tasks[task_id].updated_timestamp = utc_now_iso()
                         if new_status == "pending":
-                            qs.jobs[job_id].command_array = []
+                            qs.tasks[task_id].command_array = []
                         changed = True
                 if changed:
                     atomic_write_json(queue_file, qs.to_dict())
@@ -445,28 +445,28 @@ class QueueView:  # pragma: no cover
                 except Exception:
                     qs = QueueState()
 
-                count = len(qs.queue_order)
+                count = len(qs.task_order)
                 if count == 0:
                     QMessageBox.information(self, "Clear Queue", "Queue is already empty.")
                     return
 
                 reply = QMessageBox.question(
                     self, "Clear Queue",
-                    f"Remove all {count} job(s) from the queue?\n\n"
-                    "This cannot be undone. Jobs will need to be re-sent from the Jobs tab.",
+                    f"Remove all {count} task(s) from the queue?\n\n"
+                    "This cannot be undone. Tasks will need to be re-sent from the Jobs tab.",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
                 )
                 if reply != QMessageBox.StandardButton.Yes:
                     return
 
-                qs.jobs.clear()
-                qs.queue_order.clear()
-                qs.current_running_job = None
+                qs.tasks.clear()
+                qs.task_order.clear()
+                qs.current_running_task = None
                 atomic_write_json(queue_file, qs.to_dict())
                 state.job_count = 0
                 self.txt_log.clear()
-                self.lbl_log_header.setText("Select a job to view its log")
+                self.lbl_log_header.setText("Select a task to view its log")
                 self._refresh_list()
 
             def _copy_command(self) -> None:
@@ -474,7 +474,7 @@ class QueueView:  # pragma: no cover
 
                 item = self.job_list.currentItem()
                 if item is None:
-                    self.lbl_log_header.setText("Select a job first to copy its command.")
+                    self.lbl_log_header.setText("Select a task first to copy its command.")
                     return
 
                 import json
@@ -482,7 +482,7 @@ class QueueView:  # pragma: no cover
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.models.queue_state import QueueState
 
-                job_id = item.data(256)
+                task_id = item.data(256)
                 state = get_app_state()
                 if not state.is_workspace_open():
                     return
@@ -495,18 +495,18 @@ class QueueView:  # pragma: no cover
                 except Exception:
                     return
 
-                job = qs.jobs.get(job_id)
-                if job is None:
+                task = qs.tasks.get(task_id)
+                if task is None:
                     return
 
                 # Prefer the command logged in the .log file — it is the exact
-                # command that was passed to hashcat when the job actually ran.
+                # command that was passed to hashcat when the task actually ran.
                 # The command_array stored in queue-state.json is rebuilt every
                 # time the queue starts, so it reflects current settings, not
-                # necessarily what produced this job's output.
+                # necessarily what produced this task's output.
                 cmd_str: str | None = None
                 source = "log"
-                log_abs = state.workspace_root / job.log_path
+                log_abs = state.workspace_root / task.log_path
                 if log_abs.exists():
                     try:
                         for line in log_abs.read_text(
@@ -518,9 +518,9 @@ class QueueView:  # pragma: no cover
                     except OSError:
                         pass
 
-                # Fall back to command_array (for pending/unrun jobs)
+                # Fall back to command_array (for pending/unrun tasks)
                 if not cmd_str:
-                    if not job.command_array:
+                    if not task.command_array:
                         self.lbl_log_header.setText(
                             "No command built yet — start the queue to generate commands."
                         )
@@ -528,7 +528,7 @@ class QueueView:  # pragma: no cover
                     # Quote any argument that contains a space so the result is
                     # pasteable into PowerShell / CMD without modification.
                     parts: list[str] = []
-                    for arg in job.command_array:
+                    for arg in task.command_array:
                         parts.append(f'"{arg}"' if " " in arg else arg)
                     cmd_str = " ".join(parts)
                     source = "queue-state"
@@ -544,18 +544,18 @@ class QueueView:  # pragma: no cover
             # ------------------------------------------------------------------
 
             def _on_job_selected(self, current, _previous) -> None:
-                """Load and display log + command array for the selected job."""
+                """Load and display log + command array for the selected task."""
                 import json
 
                 from portable_crypt_recovery.app.app_state import get_app_state
                 from portable_crypt_recovery.models.queue_state import QueueState
 
                 if current is None:
-                    self.lbl_log_header.setText("Select a job to view its log")
+                    self.lbl_log_header.setText("Select a task to view its log")
                     self.txt_log.clear()
                     return
 
-                job_id = current.data(256)
+                task_id = current.data(256)
                 state = get_app_state()
                 if not state.is_workspace_open():
                     return
@@ -568,23 +568,23 @@ class QueueView:  # pragma: no cover
                 except Exception:
                     return
 
-                job = qs.jobs.get(job_id)
-                if job is None:
+                task = qs.tasks.get(task_id)
+                if task is None:
                     return
 
-                # Track whether this is a fresh job selection or a poll refresh
-                # for the same job that's already displayed.
-                is_new_job = (job_id != self._log_job_id)
-                self._log_job_id = job_id
-                if is_new_job:
-                    # User clicked a different job — reset follow state
+                # Track whether this is a fresh task selection or a poll refresh
+                # for the same task that's already displayed.
+                is_new_task = (task_id != self._log_task_id)
+                self._log_task_id = task_id
+                if is_new_task:
+                    # User clicked a different task — reset follow state
                     self._log_follow = True
 
-                # Terminal jobs never gain new log content after finishing, so
+                # Terminal tasks never gain new log content after finishing, so
                 # there is nothing to refresh on a poll tick.  Skip the reload
                 # entirely so the user's scroll position is undisturbed.
                 _TERMINAL = {"cracked", "exhausted", "failed", "skipped", "aborted"}
-                if not is_new_job and job.status in _TERMINAL:
+                if not is_new_task and task.status in _TERMINAL:
                     return
 
                 # Save scroll position before setPlainText wipes it
@@ -594,12 +594,12 @@ class QueueView:  # pragma: no cover
                 lines: list[str] = []
 
                 # ---- CRACKED BANNER (top, hard to miss) ----
-                if job.status == "cracked":
-                    pw = job.cracked_password
+                if task.status == "cracked":
+                    pw = task.cracked_password
                     if not pw:
                         # Fall back to reading the outfile directly
                         try:
-                            outfile_abs = state.workspace_root / job.outfile_path
+                            outfile_abs = state.workspace_root / task.outfile_path
                             if outfile_abs.exists():
                                 raw = outfile_abs.read_text(
                                     encoding="utf-8", errors="replace"
@@ -613,14 +613,14 @@ class QueueView:  # pragma: no cover
                     lines.append("=" * 60)
                     lines.append("  *** CRACKED ***")
                     lines.append(f"  PASSWORD : {pw if pw else '(see outfile below)'}")
-                    outfile_rel = job.outfile_path
+                    outfile_rel = task.outfile_path
                     lines.append(f"  OUTFILE  : {outfile_rel}")
                     lines.append("=" * 60)
                     lines.append("")
 
                 # Command — read from the log file so it matches what actually ran.
-                # Fall back to command_array for pending jobs that haven't run yet.
-                log_abs = state.workspace_root / job.log_path
+                # Fall back to command_array for pending tasks that haven't run yet.
+                log_abs = state.workspace_root / task.log_path
                 displayed_cmd: str | None = None
                 if log_abs.exists():
                     try:
@@ -632,8 +632,8 @@ class QueueView:  # pragma: no cover
                                 break
                     except OSError:
                         pass
-                if displayed_cmd is None and job.command_array:
-                    displayed_cmd = " ".join(job.command_array)
+                if displayed_cmd is None and task.command_array:
+                    displayed_cmd = " ".join(task.command_array)
                 lines.append("=== COMMAND (actual hashcat invocation) ===")
                 if displayed_cmd:
                     lines.append(displayed_cmd)
@@ -642,10 +642,10 @@ class QueueView:  # pragma: no cover
                 lines.append("")
 
                 # Log file
-                status_label = job.status.upper()
+                status_label = task.status.upper()
                 self.lbl_log_header.setText(
-                    f"Job {job_id[:8]}  |  mode {job.hashcat_mode}"
-                    f"  |  [{status_label}]  |  log: {job.log_path}"
+                    f"Task {task_id[:8]}  |  mode {task.hashcat_mode}"
+                    f"  |  [{status_label}]  |  log: {task.log_path}"
                 )
                 if log_abs.exists():
                     try:
@@ -669,11 +669,11 @@ class QueueView:  # pragma: no cover
                 log_sb.blockSignals(True)
                 self.txt_log.setPlainText("\n".join(lines))
                 # setPlainText resets scroll to 0; apply smart scroll:
-                # - New job selected: scroll per status and (re-)enable following
-                # - Same job, following enabled: scroll per status
-                # - Same job, user scrolled away: restore their previous position
-                if is_new_job or self._log_follow:
-                    if job.status == "cracked":
+                # - New task selected: scroll per status and (re-)enable following
+                # - Same task, following enabled: scroll per status
+                # - Same task, user scrolled away: restore their previous position
+                if is_new_task or self._log_follow:
+                    if task.status == "cracked":
                         log_sb.setValue(0)
                     else:
                         log_sb.setValue(log_sb.maximum())
@@ -710,15 +710,15 @@ class QueueView:  # pragma: no cover
                     self._on_queue_stopped()
                     return
 
-                # Update running job label
-                current_id = qs.current_running_job
-                if current_id and current_id in qs.jobs:
-                    job = qs.jobs[current_id]
+                # Update running task label
+                current_id = qs.current_running_task
+                if current_id and current_id in qs.tasks:
+                    task = qs.tasks[current_id]
                     self.lbl_running.setText(
-                        f"Running: {job.session_name}  mode={job.hashcat_mode}"
+                        f"Running: {task.session_name}  mode={task.hashcat_mode}"
                     )
                 else:
-                    self.lbl_running.setText("No job running")
+                    self.lbl_running.setText("No task running")
 
                 self._refresh_list()
                 # Keep the log panel fresh for whichever job is selected
@@ -779,34 +779,34 @@ class QueueView:  # pragma: no cover
                     "skipped":   QColor("#8888aa"),
                 }
 
-                # --- Group jobs by draft (preserving queue order) ---
+                # --- Group tasks by draft (preserving task order) ---
                 # Build ordered list of (draft_id, draft_label) groups
                 seen_drafts: list[tuple[str, str]] = []
                 seen_draft_ids: set[str] = set()
-                for job_id in qs.queue_order:
-                    job = qs.jobs.get(job_id)
-                    if job is None:
+                for task_id in qs.task_order:
+                    task = qs.tasks.get(task_id)
+                    if task is None:
                         continue
-                    did = job.draft_id or ""
+                    did = task.draft_id or ""
                     if did not in seen_draft_ids:
                         seen_draft_ids.add(did)
-                        seen_drafts.append((did, job.draft_label or did or "Ungrouped jobs"))
+                        seen_drafts.append((did, task.draft_label or did or "Ungrouped tasks"))
 
                 # Count status per draft for the header summary
                 draft_status_counts: dict[str, dict[str, int]] = {}
-                for job_id in qs.queue_order:
-                    job = qs.jobs.get(job_id)
-                    if job is None:
+                for task_id in qs.task_order:
+                    task = qs.tasks.get(task_id)
+                    if task is None:
                         continue
-                    did = job.draft_id or ""
+                    did = task.draft_id or ""
                     draft_status_counts.setdefault(did, {})
-                    draft_status_counts[did][job.status] = (
-                        draft_status_counts[did].get(job.status, 0) + 1
+                    draft_status_counts[did][task.status] = (
+                        draft_status_counts[did].get(task.status, 0) + 1
                     )
 
-                # --- Render: group header then (optionally) jobs for each draft ---
+                # --- Render: group header then (optionally) tasks for each draft ---
                 for draft_id, draft_label in seen_drafts:
-                    # Count jobs and build a short status summary
+                    # Count tasks and build a short status summary
                     sc = draft_status_counts.get(draft_id, {})
                     total = sum(sc.values())
                     parts = []
@@ -815,15 +815,15 @@ class QueueView:  # pragma: no cover
                         n = sc.get(st, 0)
                         if n:
                             parts.append(f"{n} {st}")
-                    summary = "  ·  ".join(parts) if parts else "0 jobs"
+                    summary = "  ·  ".join(parts) if parts else "0 tasks"
 
                     is_collapsed = draft_id in self._collapsed_drafts
                     triangle = "▶" if is_collapsed else "▼"
                     sep = QListWidgetItem(
-                        f"{triangle}  {draft_label}  ({total} jobs: {summary})"
+                        f"{triangle}  {draft_label}  ({total} tasks: {summary})"
                     )
                     # ItemIsEnabled makes it clickable (for toggle) but not
-                    # selectable as a regular job row.
+                    # selectable as a regular task row.
                     sep.setFlags(Qt.ItemFlag.ItemIsEnabled)
                     sep.setData(257, draft_id)   # mark as group header
                     sep.setBackground(QBrush(QColor("#1e2a3a")))
@@ -833,37 +833,37 @@ class QueueView:  # pragma: no cover
                     if is_collapsed:
                         continue   # children hidden; skip child rows
 
-                    for job_id in qs.queue_order:
-                        job = qs.jobs.get(job_id)
-                        if job is None:
+                    for task_id in qs.task_order:
+                        task = qs.tasks.get(task_id)
+                        if task is None:
                             continue
-                        if (job.draft_id or "") != draft_id:
+                        if (task.draft_id or "") != draft_id:
                             continue
-                        pim_label = f"PIM={job.pim_value}" if job.pim_mode == "custom" else "default PIM"
+                        pim_label = f"PIM={task.pim_value}" if task.pim_mode == "custom" else "default PIM"
                         label = (
-                            f"  [{job.status.upper():<14}]  "
-                            f"mode={job.hashcat_mode}  {pim_label}  "
-                            f"session={job.session_name}"
+                            f"  [{task.status.upper():<14}]  "
+                            f"mode={task.hashcat_mode}  {pim_label}  "
+                            f"session={task.session_name}"
                         )
                         list_item = QListWidgetItem(label)
-                        list_item.setData(256, job_id)
-                        color = _bg.get(job.status)
+                        list_item.setData(256, task_id)
+                        color = _bg.get(task.status)
                         if color:
                             list_item.setBackground(QBrush(color))
-                        fg = _fg.get(job.status)
+                        fg = _fg.get(task.status)
                         if fg:
                             list_item.setForeground(QBrush(fg))
                         self.job_list.addItem(list_item)
-                        if job_id == current_data:
+                        if task_id == current_data:
                             self.job_list.setCurrentItem(list_item)
 
-                # Auto-scroll: jump to running job only when following;
+                # Auto-scroll: jump to running task only when following;
                 # otherwise restore the user's previous scroll position.
                 # Block signals so setValue doesn't flip _job_list_follow.
                 running_item = None
                 for i in range(self.job_list.count()):
                     it = self.job_list.item(i)
-                    if it and it.data(256) == qs.current_running_job:
+                    if it and it.data(256) == qs.current_running_task:
                         running_item = it
                         break
                 jsb = self.job_list.verticalScrollBar()
@@ -877,11 +877,11 @@ class QueueView:  # pragma: no cover
                     jsb.setValue(scroll_pos)
                 jsb.blockSignals(False)
 
-                # --- Progress bar + jobs remaining counter ---
-                total_jobs = len(qs.queue_order)
+                # --- Progress bar + tasks remaining counter ---
+                total_jobs = len(qs.task_order)
                 pending_jobs = sum(
-                    1 for jid in qs.queue_order
-                    if qs.jobs.get(jid) and qs.jobs[jid].status in ("pending", "running")
+                    1 for tid in qs.task_order
+                    if qs.tasks.get(tid) and qs.tasks[tid].status in ("pending", "running")
                 )
                 done_jobs = total_jobs - pending_jobs
                 self.progress_bar.setValue(
@@ -891,7 +891,7 @@ class QueueView:  # pragma: no cover
                     remaining_text = (
                         f"{pending_jobs} remaining  /  {total_jobs} total"
                         if pending_jobs > 0
-                        else f"All {total_jobs} job(s) done"
+                        else f"All {total_jobs} task(s) done"
                     )
                     self.lbl_remaining.setText(remaining_text)
                     # Update window title bar

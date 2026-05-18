@@ -119,10 +119,10 @@ def test_full_workspace_flow(tmp_path):
 
     # 9. Build queue state and save it
     queue_state = QueueState(
-        queue_order=[j.job_id for j in jobs],
-        current_running_job=None,
+        task_order=[j.task_id for j in jobs],
+        current_running_task=None,
         status="stopped",
-        jobs={j.job_id: j for j in jobs},
+        tasks={j.task_id: j for j in jobs},
     )
     queue_path = ws.root / "queue" / "queue-state.json"
     atomic_write_json(queue_path, queue_state.to_dict())
@@ -132,5 +132,5 @@ def test_full_workspace_flow(tmp_path):
         saved = json.load(fh)
     assert saved["schema_version"] == 1
     assert saved["status"] == "stopped"
-    assert len(saved["jobs"]) == len(jobs)
-    assert saved["queue_order"] == [j.job_id for j in jobs]
+    assert len(saved["tasks"]) == len(jobs)
+    assert saved["task_order"] == [j.task_id for j in jobs]

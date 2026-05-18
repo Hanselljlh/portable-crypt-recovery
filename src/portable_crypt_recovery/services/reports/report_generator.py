@@ -7,8 +7,8 @@ from pathlib import Path
 from portable_crypt_recovery.core.atomic_write import atomic_write_json, atomic_write_text
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.timestamps import utc_now_iso
-from portable_crypt_recovery.models.job import QueuedJob
 from portable_crypt_recovery.models.report import Report
+from portable_crypt_recovery.models.task import QueuedTask
 from portable_crypt_recovery.services.reports.cracked_package import assemble_cracked_package
 from portable_crypt_recovery.services.reports.report_index import add_report_to_index
 
@@ -41,7 +41,7 @@ or TrueCrypt is required. These are guidance notes only.
 
 def generate_cracked_report(
     workspace_root: Path,
-    job: QueuedJob,
+    job: QueuedTask,
     cracked_password: str,
     stats_text: str = "",
     run_id: str | None = None,
@@ -70,7 +70,7 @@ def generate_cracked_report(
 
     report = Report(
         report_id=report_id,
-        job_id=job.job_id,
+        job_id=job.task_id,
         cracked_password=cracked_password,
         recovered_header_path=recovered_header_path,
         command_used=job.command_array,
@@ -95,7 +95,7 @@ def generate_cracked_report(
     atomic_write_text(
         pkg_dir / "recovered-result.txt",
         f"Recovered Password: {cracked_password}\n"
-        f"Job ID: {job.job_id}\n"
+        f"Task ID: {job.task_id}\n"
         f"Hashcat Mode: {job.hashcat_mode}\n"
         f"PIM Mode: {job.pim_mode}\n"
         f"PIM Value: {job.pim_value}\n"
@@ -108,7 +108,7 @@ def generate_cracked_report(
         {
             "schema_version": 1,
             "report_id": report_id,
-            "job_id": job.job_id,
+            "job_id": job.task_id,
             "cracked_password": cracked_password,
             "hashcat_mode": job.hashcat_mode,
             "pim_mode": job.pim_mode,
@@ -121,7 +121,7 @@ def generate_cracked_report(
     atomic_write_text(
         pkg_dir / "recovered-result.md",
         f"# Recovery Report\n\n"
-        f"**Job ID:** `{job.job_id}`\n\n"
+        f"**Task ID:** `{job.task_id}`\n\n"
         f"**Recovered:** {now}\n\n"
         f"**Hashcat Mode:** {job.hashcat_mode}\n\n"
         f"**PIM:** {job.pim_mode} ({job.pim_value})\n\n"

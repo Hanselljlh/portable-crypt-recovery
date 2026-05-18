@@ -285,12 +285,12 @@ class JobsView:  # pragma: no cover
                             workspace_root=ws,
                         )
 
-                        for job in jobs:
-                            job.draft_id = draft.get("draft_id", "")
-                            job.draft_label = draft.get("label", "")
-                            qs.jobs[job.job_id] = job
-                            qs.queue_order.append(job.job_id)
-                            all_jobs.append(job)
+                        for task in jobs:
+                            task.draft_id = draft.get("draft_id", "")
+                            task.draft_label = draft.get("label", "")
+                            qs.tasks[task.task_id] = task
+                            qs.task_order.append(task.task_id)
+                            all_jobs.append(task)
 
                 if not all_jobs:
                     raise ValueError("No hash modes available for any selected header.")

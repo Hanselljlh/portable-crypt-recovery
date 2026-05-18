@@ -4,24 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from portable_crypt_recovery.models.job import QueuedJob
 from portable_crypt_recovery.models.queue_state import QueueState
+from portable_crypt_recovery.models.task import QueuedTask
 
 
-def find_resumable_job(queue_state: QueueState, workspace_root: Path) -> QueuedJob | None:
-    """Return the first job with status 'stopped_saved' that has a restore file.
+def find_resumable_job(queue_state: QueueState, workspace_root: Path) -> QueuedTask | None:
+    """Return the first task with status 'stopped_saved' that has a restore file.
 
-    Returns None if no resumable job is found.
+    Returns None if no resumable task is found.
     """
-    for job_id in queue_state.queue_order:
-        job = queue_state.jobs.get(job_id)
-        if job is None:
+    for task_id in queue_state.task_order:
+        task = queue_state.tasks.get(task_id)
+        if task is None:
             continue
-        if job.status != "stopped_saved":
+        if task.status != "stopped_saved":
             continue
-        restore_file = workspace_root / "hashcat" / "restore" / f"{job.session_name}.restore"
+        restore_file = workspace_root / "hashcat" / "restore" / f"{task.session_name}.restore"
         if restore_file.exists():
-            return job
+            return task
     return None
 
 

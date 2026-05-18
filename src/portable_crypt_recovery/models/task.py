@@ -1,4 +1,4 @@
-"""Job models."""
+"""Task models (individual hashcat invocations)."""
 
 from __future__ import annotations
 
@@ -61,10 +61,10 @@ class JobDraft:
 
 
 @dataclass
-class QueuedJob:
-    """A fully expanded, ready-to-run Hashcat job."""
+class QueuedTask:
+    """A fully expanded, ready-to-run Hashcat task (individual hashcat invocation)."""
 
-    job_id: str
+    task_id: str
     target_id: str
     header_id: str
     hash_mode_set_id: str
@@ -84,7 +84,7 @@ class QueuedJob:
     created_timestamp: str = ""
     updated_timestamp: str = ""
     notes: str = ""
-    # Draft provenance — which draft this job was expanded from
+    # Draft provenance — which draft this task was expanded from
     draft_id: str = ""
     draft_label: str = ""
     # Crack result — populated by queue runner after classification
@@ -93,7 +93,7 @@ class QueuedJob:
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": 1,
-            "job_id": self.job_id,
+            "task_id": self.task_id,
             "target_id": self.target_id,
             "header_id": self.header_id,
             "hash_mode_set_id": self.hash_mode_set_id,
@@ -119,9 +119,9 @@ class QueuedJob:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> QueuedJob:
+    def from_dict(cls, data: dict[str, Any]) -> QueuedTask:
         return cls(
-            job_id=data["job_id"],
+            task_id=data["task_id"],
             target_id=data["target_id"],
             header_id=data["header_id"],
             hash_mode_set_id=data["hash_mode_set_id"],

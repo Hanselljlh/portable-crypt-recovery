@@ -1,4 +1,4 @@
-"""Final job expander: HashModeSet x PimSet x KeyfileSet x PasswordSource -> list[QueuedJob]."""
+"""Final job expander: HashModeSet x PimSet x KeyfileSet x PasswordSource -> list[QueuedTask]."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from pathlib import Path
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.timestamps import utc_now_iso
 from portable_crypt_recovery.models.hash_mode_set import HashModeSet
-from portable_crypt_recovery.models.job import QueuedJob
 from portable_crypt_recovery.models.keyfile_set import KeyfileSet
 from portable_crypt_recovery.models.password_source import PasswordSource
 from portable_crypt_recovery.models.pim_set import PimSet
+from portable_crypt_recovery.models.task import QueuedTask
 
 
 def expand_jobs(
@@ -21,10 +21,10 @@ def expand_jobs(
     keyfile_sets: list[KeyfileSet] | None,
     password_source: PasswordSource,
     workspace_root: Path,
-) -> list[QueuedJob]:
-    """Expand all combinations into a list of QueuedJob objects.
+) -> list[QueuedTask]:
+    """Expand all combinations into a list of QueuedTask objects.
 
-    Each job gets a unique session name and workspace-local paths.
+    Each task gets a unique session name and workspace-local paths.
 
     Parameters
     ----------
@@ -43,7 +43,7 @@ def expand_jobs(
     workspace_root:
         Workspace root for constructing paths.
     """
-    jobs: list[QueuedJob] = []
+    tasks: list[QueuedTask] = []
     now = utc_now_iso()
 
     # Resolve PIM iterations
@@ -61,8 +61,8 @@ def expand_jobs(
     for mode_entry in mode_set.entries:
         for pim_mode, pim_value in pim_iterations:
             for kf_set in kf_iterations:
-                job_id = new_id("job")
-                session_name = f"pcr_{job_id}"
+                task_id = new_id("task")
+                session_name = f"pcr_{task_id}"
 
                 # Paths (workspace-relative)
                 potfile_rel = f"hashcat/potfile/{session_name}.potfile"
@@ -76,8 +76,8 @@ def expand_jobs(
 
                 kf_set_id = kf_set.set_id if kf_set is not None else None
 
-                job = QueuedJob(
-                    job_id=job_id,
+                task = QueuedTask(
+                    task_id=task_id,
                     target_id=target_id,
                     header_id=header_id,
                     hash_mode_set_id=mode_set.mode_set_id,
@@ -97,9 +97,9 @@ def expand_jobs(
                     created_timestamp=now,
                     updated_timestamp=now,
                 )
-                jobs.append(job)
+                tasks.append(task)
 
-    return jobs
+    return tasks
 
 
 def _validate_workspace_path(workspace_root: Path, relative_path: str) -> None:

@@ -116,15 +116,15 @@ class DashboardView:  # pragma: no cover
                 except Exception:
                     return
 
-                # Show last 20 jobs by order, newest first
-                recent = list(reversed(qs.queue_order[-20:]))
-                for job_id in recent:
-                    job = qs.jobs.get(job_id)
-                    if job is None:
+                # Show last 20 tasks by order, newest first
+                recent = list(reversed(qs.task_order[-20:]))
+                for task_id in recent:
+                    task = qs.tasks.get(task_id)
+                    if task is None:
                         continue
                     self.activity_list.addItem(
-                        f"[{job.status.upper():<14}]  mode={job.hashcat_mode}  "
-                        f"session={job.session_name}"
+                        f"[{task.status.upper():<14}]  mode={task.hashcat_mode}  "
+                        f"session={task.session_name}"
                     )
 
         return _DashboardView(app_state)

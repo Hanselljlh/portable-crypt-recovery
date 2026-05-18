@@ -8,7 +8,7 @@ import pytest
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.core.timestamps import utc_now_iso
 from portable_crypt_recovery.models.header import Header
-from portable_crypt_recovery.models.job import QueuedJob
+from portable_crypt_recovery.models.task import QueuedTask
 from portable_crypt_recovery.services.hashcat.command_builder import (
     CommandBuilderError,
     build_command,
@@ -52,11 +52,11 @@ def _make_header(ws: Path) -> Header:
     return h
 
 
-def _make_job(header: Header, ws: Path) -> QueuedJob:
-    job_id = new_id("job")
-    session = f"pcr_{job_id}"
-    return QueuedJob(
-        job_id=job_id,
+def _make_job(header: Header, ws: Path) -> QueuedTask:
+    task_id = new_id("task")
+    session = f"pcr_{task_id}"
+    return QueuedTask(
+        task_id=task_id,
         target_id="target_001",
         header_id=header.header_id,
         hash_mode_set_id="modeset_001",
