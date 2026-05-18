@@ -46,6 +46,7 @@ class QueueRunner:
         self._current_runner: HashcatProcessRunner | None = None
         self._stop_after_current = False
         self._stop_discard = False
+        self._stop_requeue = False   # True → reset job to pending instead of failed
         self._lock = threading.Lock()
 
     def start(self) -> bool:
@@ -79,15 +80,18 @@ class QueueRunner:
         self._stop_after_current = True
 
     def stop_and_save(self) -> None:
-        """Terminate current job and mark it as stopped_saved."""
+        """Terminate current job and reset it to pending so it re-runs next time."""
         self._stop_discard = False
+        self._stop_requeue = True
+        self._stop_after_current = True   # also stop the loop after this job
         with self._lock:
             if self._current_runner:
                 self._current_runner.terminate()
 
     def stop_and_discard(self) -> None:
-        """Terminate current job and mark it as failed."""
+        """Terminate current job and mark it as failed (will not re-run)."""
         self._stop_discard = True
+        self._stop_requeue = False
         with self._lock:
             if self._current_runner:
                 self._current_runner.terminate()
@@ -224,7 +228,11 @@ class QueueRunner:
         potfile = self._workspace_root / job.potfile_path
         classification = classify_result(exit_code, outfile, potfile)
 
-        if self._stop_discard:
+        if self._stop_requeue:
+            # stop_and_save: reset to pending so the job reruns next queue start
+            job.status = "pending"
+            job.cracked_password = None
+        elif self._stop_discard:
             job.status = "failed"
         else:
             job.status = classification.status
@@ -232,20 +240,19 @@ class QueueRunner:
                 job.cracked_password = classification.cracked_password
 
         # Write footer — always include exit code so failed jobs are diagnosable.
-        # If hashcat produced no output at all and still failed, say so explicitly
-        # so the user knows to check the command / driver / module.
         end_ts = utc_now_iso()
         with log_path.open("a", encoding="utf-8") as fh:
             fh.write("\n=== PCR JOB END ===\n")
             fh.write(f"finished    : {end_ts}\n")
             fh.write(f"exit_code   : {exit_code}\n")
             fh.write(f"result      : {job.status}\n")
-            if not stdout_lines and exit_code not in (0, 1):
+            # Warn when hashcat produced zero output and the exit code is an error
+            if not stdout_lines and exit_code not in (0, 1, 2, 3, 4, 5):
                 fh.write(
                     "\n[WARNING] Hashcat produced no output before exiting.\n"
                     "Possible causes:\n"
                     "  - Hash mode module not present in this hashcat build\n"
-                    "  - Unsupported flag for this hashcat version (e.g. --status-timer)\n"
+                    "  - Unsupported flag for this hashcat version\n"
                     "  - OpenCL / CUDA driver missing or incompatible\n"
                     "  - Header file path could not be resolved\n"
                     f"Command was: {' '.join(args)}\n"

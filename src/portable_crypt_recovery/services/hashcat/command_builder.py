@@ -154,6 +154,11 @@ def build_command(
     # shows real-time H/s without waiting for the default 10-second interval.
     args += ["--status", "--status-json", "--status-timer", "1"]
 
+    # Suppress hashcat's own session .log and .pid files in the CWD (the
+    # hashcat executable directory).  PCR writes its own log to the workspace;
+    # having duplicate log files scattered in tools/hashcat/ is confusing.
+    args += ["--logfile-disable"]
+
     # PIM handling
     if job.pim_mode == "custom" and job.pim_value is not None:
         args += [

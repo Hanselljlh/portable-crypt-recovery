@@ -34,7 +34,7 @@ class QueueView:  # pragma: no cover
                 self.btn_start = QPushButton("Start Queue")
                 self.btn_pause_now = QPushButton("Pause Now")
                 self.btn_pause_after = QPushButton("Pause After Current")
-                self.btn_stop_save = QPushButton("Stop & Save")
+                self.btn_stop_save = QPushButton("Stop & Re-queue")
                 self.btn_stop_discard = QPushButton("Stop & Discard")
                 self.btn_resume = QPushButton("Resume")
                 self.btn_skip = QPushButton("Skip Selected")
@@ -665,24 +665,24 @@ class QueueView:  # pragma: no cover
 
                 # --- Color maps (dark-theme friendly) ---
                 _bg = {
-                    "pending":       None,
-                    "running":       QColor("#1a3a2a"),
-                    "paused":        QColor("#3a3010"),
-                    "cracked":       QColor("#0f3020"),
-                    "exhausted":     QColor("#3a1a1a"),
-                    "failed":        QColor("#3a1a1a"),
-                    "stopped_saved": QColor("#2a2a10"),
-                    "skipped":       QColor("#222228"),
+                    "pending":   None,
+                    "running":   QColor("#1a3a2a"),
+                    "paused":    QColor("#3a3010"),
+                    "cracked":   QColor("#0f3020"),
+                    "exhausted": QColor("#2a1a10"),   # orange-tinted: tried, no match
+                    "aborted":   QColor("#2a2a10"),   # yellow-tinted: stopped, will re-run
+                    "failed":    QColor("#3a1010"),   # red: error
+                    "skipped":   QColor("#222228"),
                 }
                 _fg = {
-                    "pending":       None,
-                    "running":       QColor("#7fe0a0"),
-                    "paused":        QColor("#f0c060"),
-                    "cracked":       QColor("#50e090"),
-                    "exhausted":     QColor("#e08080"),
-                    "failed":        QColor("#e08080"),
-                    "stopped_saved": QColor("#c0b860"),
-                    "skipped":       QColor("#8888aa"),
+                    "pending":   None,
+                    "running":   QColor("#7fe0a0"),
+                    "paused":    QColor("#f0c060"),
+                    "cracked":   QColor("#50e090"),
+                    "exhausted": QColor("#e0a060"),   # orange: tried, no match
+                    "aborted":   QColor("#c0c060"),   # yellow: stopped, re-queued
+                    "failed":    QColor("#e06060"),   # red: error
+                    "skipped":   QColor("#8888aa"),
                 }
 
                 # --- Group jobs by draft (preserving queue order) ---
@@ -716,8 +716,8 @@ class QueueView:  # pragma: no cover
                     sc = draft_status_counts.get(draft_id, {})
                     total = sum(sc.values())
                     parts = []
-                    for st in ("running", "pending", "cracked", "exhausted", "failed",
-                               "paused", "stopped_saved", "skipped"):
+                    for st in ("running", "pending", "cracked", "exhausted",
+                               "aborted", "failed", "paused", "skipped"):
                         n = sc.get(st, 0)
                         if n:
                             parts.append(f"{n} {st}")
