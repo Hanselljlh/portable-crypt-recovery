@@ -169,14 +169,26 @@ class QueueRunner:
                 self._run_job(job)
                 if self._stop_after_current:
                     break
-                # Stop entire queue when any job cracks (if configured)
                 job_after = self._queue_state.jobs.get(job_id)
-                if (
-                    job_after is not None
-                    and job_after.status == "cracked"
-                    and self._behavior_after_crack == "stop_entire_queue"
-                ):
-                    break
+                if job_after is not None and job_after.status == "cracked":
+                    if self._behavior_after_crack == "stop_entire_queue":
+                        # Stop the whole queue immediately.
+                        break
+                    else:
+                        # "continue_other_uncracked_targets": skip every other
+                        # pending job that targets the same header — they are
+                        # redundant now that the header is cracked.  Jobs for
+                        # different headers are left pending so they still run.
+                        cracked_header = job_after.header_id
+                        for other_jid in self._queue_state.queue_order:
+                            other = self._queue_state.jobs.get(other_jid)
+                            if (
+                                other is not None
+                                and other.status == "pending"
+                                and other.header_id == cracked_header
+                            ):
+                                other.status = "skipped"
+                                other.updated_timestamp = utc_now_iso()
         finally:
             self._queue_state.status = "stopped"
             self._queue_state.current_running_job = None
