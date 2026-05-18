@@ -43,10 +43,10 @@ def empty_targets_record() -> dict:
 def empty_queue_state_record() -> dict:
     return {
         "schema_version": WORKSPACE_SCHEMA_VERSION,
-        "queue_order": [],
-        "current_running_job": None,
+        "task_order": [],
+        "current_running_task": None,
         "status": "stopped",
-        "jobs": {},
+        "tasks": {},
     }
 
 

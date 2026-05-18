@@ -716,7 +716,11 @@ class SettingsView:  # pragma: no cover
                     queue_file = workspace_root / "queue" / "queue-state.json"
                     if queue_file.exists():
                         qs_data = json.loads(queue_file.read_text(encoding="utf-8"))
-                        state.job_count = len(qs_data.get("jobs", {}))
+                        # Support legacy files that still use the old "jobs" key (< 0.1.29)
+                        tasks_map = (
+                            qs_data["tasks"] if "tasks" in qs_data else qs_data.get("jobs", {})
+                        )
+                        state.job_count = len(tasks_map)
                     else:
                         state.job_count = 0
                 except Exception:

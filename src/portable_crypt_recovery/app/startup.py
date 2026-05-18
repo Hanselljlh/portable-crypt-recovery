@@ -119,12 +119,13 @@ def try_auto_open_workspace(app_root: Path) -> bool:
     except Exception:
         pass
 
-    # Count queue jobs
+    # Count queued tasks (support legacy files that still use the old "jobs" key)
     try:
         queue_file = ws.root / "queue" / "queue-state.json"
         if queue_file.exists():
             qs_data = json.loads(queue_file.read_text(encoding="utf-8"))
-            state.job_count = len(qs_data.get("jobs", {}))
+            tasks_map = qs_data["tasks"] if "tasks" in qs_data else qs_data.get("jobs", {})
+            state.job_count = len(tasks_map)
     except Exception:
         pass
 

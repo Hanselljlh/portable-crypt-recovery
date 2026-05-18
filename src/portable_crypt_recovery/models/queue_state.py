@@ -30,13 +30,22 @@ class QueueState:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> QueueState:
+        # Support queue-state files written before the job→task rename (< 0.1.29).
+        # Prefer new keys; fall back to old keys only when the new key is absent.
+        tasks_raw = data["tasks"] if "tasks" in data else data.get("jobs", {})
+        task_order = data["task_order"] if "task_order" in data else data.get("queue_order", [])
+        current_running_task = (
+            data["current_running_task"]
+            if "current_running_task" in data
+            else data.get("current_running_job")
+        )
         tasks = {
             tid: QueuedTask.from_dict(tdata)
-            for tid, tdata in data.get("tasks", {}).items()
+            for tid, tdata in tasks_raw.items()
         }
         return cls(
-            task_order=data.get("task_order", []),
-            current_running_task=data.get("current_running_task"),
+            task_order=task_order,
+            current_running_task=current_running_task,
             status=data.get("status", "stopped"),
             tasks=tasks,
         )

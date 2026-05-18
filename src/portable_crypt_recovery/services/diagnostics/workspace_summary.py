@@ -35,14 +35,15 @@ def generate_workspace_summary(workspace_root: Path) -> str:
     header_count = len(list(header_dir.glob("*.json"))) if header_dir.exists() else 0
     lines.append(f"Headers: {header_count}")
 
-    # Jobs
+    # Tasks (support legacy files that still use the old "jobs" key)
     queue_file = workspace_root / "queue" / "queue-state.json"
-    job_count = 0
+    task_count = 0
     if queue_file.exists():
         with queue_file.open("r", encoding="utf-8") as fh:
             qd = json.load(fh)
-        job_count = len(qd.get("jobs", {}))
-    lines.append(f"Jobs:    {job_count}")
+        tasks_map = qd["tasks"] if "tasks" in qd else qd.get("jobs", {})
+        task_count = len(tasks_map)
+    lines.append(f"Tasks:   {task_count}")
 
     # Reports
     reports_dir = workspace_root / "reports" / "cracked"
