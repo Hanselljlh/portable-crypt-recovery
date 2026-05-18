@@ -73,6 +73,16 @@ def try_auto_open_workspace(app_root: Path) -> bool:
     state = get_app_state()
     state.load_from_workspace(ws.root, ws.record)
 
+    # Wire up the file-based app logger now that we know the workspace path.
+    # Without this the log handler stays as StreamHandler and app.log is never
+    # written, so the Logs tab always shows "Log file not found".
+    from portable_crypt_recovery.services.logs.app_logger import (
+        get_app_logger,
+        reset_app_logger,
+    )
+    reset_app_logger()
+    get_app_logger(ws.root)
+
     # Load settings
     settings_file = ws.root / "settings.json"
     if settings_file.exists():

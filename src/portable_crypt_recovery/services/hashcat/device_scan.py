@@ -27,6 +27,10 @@ def scan_devices(executable_path: Path, timeout_seconds: int = 30) -> DeviceScan
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
+            # Hashcat resolves ./OpenCL/, ./modules/, etc. relative to its own
+            # directory.  Running it from any other cwd produces
+            # "./OpenCL/: No such file or directory" and an empty device list.
+            cwd=str(executable_path.parent),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return DeviceScanResult(ok=False, stdout="", stderr="", error=str(exc))

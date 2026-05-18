@@ -236,8 +236,29 @@ class QueueView:  # pragma: no cover
                 use_opt = state.hashcat_setup.use_optimized_kernels
                 use_cpu_opencl = state.hashcat_setup.use_cpu_opencl
                 ignore_cuda = state.hashcat_setup.ignore_cuda
+
+                # Deduplication: skip jobs whose (header_id, effective_mode)
+                # pair has already been seen.  Without this, every draft that
+                # targets the same header will re-run the same hashcat mode
+                # against the same header file — identical work with no benefit.
+                # effective_mode accounts for the 294xx→137xx substitution so
+                # we don't run both the current and legacy variant.
+                from portable_crypt_recovery.core.timestamps import utc_now_iso as _now
+                from portable_crypt_recovery.services.hashcat.command_builder import (
+                    _CURRENT_TO_LEGACY,
+                )
+
+                seen_header_mode: set[tuple[str, int]] = set()
                 errors: list[str] = []
                 for job in pending:
+                    eff_mode = _CURRENT_TO_LEGACY.get(job.hashcat_mode, job.hashcat_mode) \
+                        if ignore_cuda else job.hashcat_mode
+                    key = (job.header_id, eff_mode)
+                    if key in seen_header_mode:
+                        job.status = "skipped"
+                        job.updated_timestamp = _now()
+                        continue
+                    seen_header_mode.add(key)
                     try:
                         job.command_array = build_command_with_devices(
                             job, hashcat_exe, ws, device_ids,

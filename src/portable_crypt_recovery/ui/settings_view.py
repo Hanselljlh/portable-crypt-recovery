@@ -652,8 +652,17 @@ class SettingsView:  # pragma: no cover
             def _activate_workspace(self, ws):
                 """Populate app_state from a just-opened or just-created workspace."""
                 import json
+
+                from portable_crypt_recovery.services.logs.app_logger import (
+                    get_app_logger,
+                    reset_app_logger,
+                )
                 state = self._state()
                 state.load_from_workspace(ws.root, ws.record)
+                # Re-point the app logger at the new workspace so the Logs tab
+                # shows output from the correct workspace folder.
+                reset_app_logger()
+                get_app_logger(ws.root)
 
                 # Load settings.json into app_state
                 settings_path = ws.root / "settings.json"
