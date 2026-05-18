@@ -193,19 +193,56 @@ class SettingsView:  # pragma: no cover
             def __init__(self, devices, current_ids, parent=None):
                 super().__init__(parent)
                 self.setWindowTitle("Select Compute Devices")
-                self.resize(480, 320)
+                self.resize(560, 380)
                 lay = QVBoxLayout(self)
-                lay.addWidget(QLabel("Choose which devices Hashcat should use:"))
+                lay.addWidget(QLabel(
+                    "Choose which devices Hashcat should use (-d flag).\n"
+                    "CUDA and OpenCL entries for the same GPU are shown separately — "
+                    "pick one. OpenCL works even when CUDA drivers are outdated."
+                ))
                 self._checks = []
-                for i, dev in enumerate(devices):
-                    label = f"{dev.get('label', f'Device {i}')}  —  {dev.get('name', '?')}"
+                for dev in devices:
+                    dev_id = dev.get("id", 0)
+                    name = dev.get("name", "?")
+                    dev_type = dev.get("type", "")
+                    alias = dev.get("alias")
+                    is_dup = "duplicate_of" in dev
+
+                    # Build a descriptive label
+                    parts = [f"#{dev_id}  {name}"]
+                    if dev_type:
+                        parts.append(f"[{dev_type}]")
+                    if alias:
+                        parts.append(f"(alias of #{alias})")
+                    label = "  ".join(parts)
+
                     cb = QCheckBox(label)
-                    cb.setChecked(i in current_ids or not current_ids)
-                    cb.setProperty("device_index", str(i))
+                    # Default: check the first occurrence of each physical device;
+                    # if user has saved IDs, restore those.
+                    if current_ids:
+                        cb.setChecked(dev_id in current_ids)
+                    else:
+                        # Default: check non-duplicate entries only
+                        cb.setChecked(not is_dup)
+                    cb.setProperty("device_id", str(dev_id))
+                    if is_dup:
+                        cb.setStyleSheet("color: #888888;")
+                        cb.setToolTip(
+                            f"Same physical GPU as Device #{dev.get('duplicate_of')} "
+                            "via a different backend. Usually only one is needed."
+                        )
                     lay.addWidget(cb)
                     self._checks.append(cb)
+
                 if not devices:
-                    lay.addWidget(QLabel("No devices detected. Check Hashcat output."))
+                    lay.addWidget(QLabel(
+                        "No devices detected.\n"
+                        "Click 'Scan Devices' after verifying Hashcat."
+                    ))
+                lay.addWidget(QLabel(
+                    "Tip: if CUDA fails with PTX version errors, enable 'Ignore CUDA' "
+                    "and select the OpenCL entry for your GPU instead."
+                ))
                 btns = QDialogButtonBox(
                     QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
                 )
@@ -215,7 +252,7 @@ class SettingsView:  # pragma: no cover
 
             def selected_ids(self) -> list[int]:
                 return [
-                    int(cb.property("device_index"))
+                    int(cb.property("device_id"))
                     for cb in self._checks
                     if cb.isChecked()
                 ]

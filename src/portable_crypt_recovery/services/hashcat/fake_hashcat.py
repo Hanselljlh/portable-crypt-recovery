@@ -16,7 +16,9 @@ if "%1"=="--version" (
   exit /b 0
 )
 if "%1"=="--backend-info" (
-  echo Device #1: Fake CPU
+  echo Backend Device ID #01
+  echo   Name...........: Fake CPU
+  echo   Type...........: CPU
   exit /b 0
 )
 echo fake hashcat unsupported args %*
@@ -31,7 +33,9 @@ if '--version' in sys.argv:
     print('hashcat (fake) v0.0')
     raise SystemExit(0)
 if '--backend-info' in sys.argv:
-    print('Device #1: Fake CPU')
+    print('Backend Device ID #01')
+    print('  Name...........: Fake CPU')
+    print('  Type...........: CPU')
     raise SystemExit(0)
 print('fake hashcat unsupported args', sys.argv[1:])
 raise SystemExit(1)

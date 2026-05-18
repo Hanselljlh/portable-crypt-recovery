@@ -14,4 +14,9 @@ def test_fake_hashcat_device_scan(tmp_path):
     fake = write_fake_hashcat(tmp_path / "hashcat")
     result = scan_devices(fake)
     assert result.ok is True
-    assert result.devices == [{"label": "Device #1", "name": "Fake CPU"}]
+    assert len(result.devices) == 1
+    dev = result.devices[0]
+    assert dev["id"] == 1
+    assert dev["name"] == "Fake CPU"
+    assert dev["type"] == "CPU"
+    assert "Fake CPU" in dev["label"]
