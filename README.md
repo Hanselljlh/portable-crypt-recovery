@@ -71,14 +71,14 @@ python -m portable_crypt_recovery
 
 **Windows:**
 ```powershell
-.\packaging\windows\build.ps1 -Version "0.1.1"
-# Output: dist\PCR-windows-portable-0.1.1.zip
+.\packaging\windows\build.ps1 -Version "0.1.30"
+# Output: dist\PCR-windows-portable-0.1.30.zip
 ```
 
 **Linux:**
 ```bash
-bash packaging/linux/build.sh 0.1.1
-# Output: dist/PCR-linux-portable-0.1.1.tar.gz
+bash packaging/linux/build.sh 0.1.30
+# Output: dist/PCR-linux-portable-0.1.30.tar.gz
 ```
 
 ## Hashcat

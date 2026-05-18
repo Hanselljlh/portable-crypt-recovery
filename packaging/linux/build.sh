@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Build script for PCR Linux portable release
 # Run from repo root:  bash packaging/linux/build.sh
-# Or with version:     bash packaging/linux/build.sh 0.1.1
+# Or with version:     bash packaging/linux/build.sh 0.1.30
 #
 # Output: dist/PCR-linux-portable/   (ready-to-tar portable folder)
 #         dist/PCR-linux-portable-<version>.tar.gz
 
 set -euo pipefail
 
-VERSION="${1:-0.1.1}"
+VERSION="${1:-0.1.30}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist"

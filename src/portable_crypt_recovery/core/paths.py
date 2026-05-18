@@ -6,7 +6,22 @@ from pathlib import Path
 
 
 def app_root_from_cwd() -> Path:
-    """Return the current working directory as the portable root."""
+    """Return the portable app root.
+
+    Resolution order:
+    1. PyInstaller packaged build (sys.frozen == True):
+       use the directory that contains the executable, so the portable
+       layout (workspaces/, tools/, …) is always sibling to the .exe
+       regardless of which directory the user launched from.
+    2. Source / dev run:
+       fall back to the current working directory, which matches the
+       previous behaviour when running ``python -m portable_crypt_recovery``
+       from the repo root.
+    """
+    import sys
+
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
     return Path.cwd().resolve()
 
 
