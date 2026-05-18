@@ -9,7 +9,6 @@ JOB_STATUSES = (
     "pending",
     "running",
     "paused",
-    "stopped_saved",
     "cracked",
     "exhausted",
     "failed",

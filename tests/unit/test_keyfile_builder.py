@@ -5,7 +5,10 @@ import pytest
 from portable_crypt_recovery.models.keyfile_set import KeyfileEntry
 from portable_crypt_recovery.services.builders.keyfile_builder import (
     KEYFILE_USED_BYTES_LIMIT,
+    KeyfileLimitBlocked,
+    KeyfileLimitConfirmRequired,
     KeyfileLimitWarning,
+    _count_combinations,
     build_keyfile_combinations,
     import_keyfile,
     normalize_keyfile,
@@ -119,3 +122,60 @@ def test_keyfile_combinations_force_bypasses_limit():
     entries = _make_dummy_entries(8)
     combos = build_keyfile_combinations(entries, max_per_set=8, force=True)
     assert len(combos) == 255
+
+
+# ---------------------------------------------------------------------------
+# _count_combinations — pre-expansion count helper
+# ---------------------------------------------------------------------------
+
+
+def test_count_combinations_single_per_set():
+    # n entries, max 1 per set => n combos
+    assert _count_combinations(5, 1) == 5
+
+
+def test_count_combinations_all_subsets():
+    # 2^n - 1 non-empty subsets
+    assert _count_combinations(4, 4) == 15
+    assert _count_combinations(8, 8) == 255
+
+
+def test_count_combinations_capped_max_per_set():
+    # max_per_set > n => same as max_per_set = n
+    assert _count_combinations(3, 99) == _count_combinations(3, 3)
+
+
+# ---------------------------------------------------------------------------
+# Limit enforcement happens before list construction
+# ---------------------------------------------------------------------------
+
+
+def test_limits_checked_before_expansion_block():
+    """KeyfileLimitBlocked must raise before any KeyfileSet is built."""
+    # 17 entries, max_per_set=17 => 2^17-1 = 131071 > 100_000
+    entries = _make_dummy_entries(17)
+    with pytest.raises(KeyfileLimitBlocked):
+        build_keyfile_combinations(entries, max_per_set=17)
+
+
+def test_limits_checked_before_expansion_confirm():
+    """KeyfileLimitConfirmRequired must raise before any KeyfileSet is built."""
+    # 14 entries, max_per_set=14 => 2^14-1 = 16383, between 10_000 and 100_000
+    entries = _make_dummy_entries(14)
+    with pytest.raises(KeyfileLimitConfirmRequired):
+        build_keyfile_combinations(entries, max_per_set=14)
+
+
+def test_limits_checked_before_expansion_warn():
+    """KeyfileLimitWarning must fire before itertools builds the list."""
+    entries = _make_dummy_entries(8)
+    # Confirm the warning is raised (pre-expansion path)
+    with pytest.warns(KeyfileLimitWarning):
+        build_keyfile_combinations(entries, max_per_set=8)
+
+
+def test_force_bypasses_block():
+    entries = _make_dummy_entries(17)
+    # Should not raise even though count > _BLOCK_ABOVE
+    combos = build_keyfile_combinations(entries, max_per_set=17, force=True)
+    assert len(combos) == (2**17 - 1)

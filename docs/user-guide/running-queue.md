@@ -25,11 +25,11 @@ change. The progress bar and status label update every two seconds.
 | Start Queue | Begin running all pending jobs |
 | Pause Now | Suspend the current Hashcat process immediately |
 | Pause After Current | Let the current job finish, then pause |
-| Resume | Resume a paused job |
-| Stop & Save | Terminate the current job, mark it `stopped_saved` |
-| Stop & Discard | Terminate the current job, mark it `failed` |
-| Skip Selected | Mark the selected job as `skipped` (will not run) |
-| Restart Selected | Reset the selected job back to `pending` |
+| Resume | Resume a paused process |
+| Stop & Re-queue | Terminate the current task and reset it to `pending` |
+| Stop & Discard | Terminate the current task, mark it `failed` |
+| Skip Selected | Mark the selected task as `skipped` (will not run) |
+| Restart Selected | Reset the selected task back to `pending` |
 
 ## Job status colors
 
@@ -38,7 +38,7 @@ change. The progress bar and status label update every two seconds.
 | White | pending | Waiting to run |
 | Green | running | Currently executing |
 | Green | cracked | Password recovered |
-| Yellow | paused / stopped_saved | Suspended or saved mid-run |
+| Yellow | paused | Suspended mid-run |
 | Red | exhausted | Wordlist exhausted, no match |
 | Red | failed | Unexpected error or discarded |
 | Grey | skipped | Manually skipped |

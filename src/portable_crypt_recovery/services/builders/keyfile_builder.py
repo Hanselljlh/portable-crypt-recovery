@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import math
 import warnings
 from pathlib import Path
 
@@ -82,6 +83,11 @@ def import_keyfile(
     )
 
 
+def _count_combinations(n: int, max_per_set: int) -> int:
+    """Return the number of non-empty subsets of size ≤ max_per_set from n items."""
+    return sum(math.comb(n, r) for r in range(1, min(max_per_set, n) + 1))
+
+
 def build_keyfile_combinations(
     entries: list[KeyfileEntry],
     max_per_set: int = 1,
@@ -100,17 +106,8 @@ def build_keyfile_combinations(
 
     Returns a list of KeyfileSet objects, one per unique combination.
     """
-    sets: list[KeyfileSet] = []
-    for r in range(1, min(max_per_set, len(entries)) + 1):
-        for combo in itertools.combinations(entries, r):
-            sets.append(
-                KeyfileSet(
-                    set_id=new_id("kfset"),
-                    entries=list(combo),
-                )
-            )
-
-    count = len(sets)
+    n = len(entries)
+    count = _count_combinations(n, max_per_set)
     if not force:
         if count > _BLOCK_ABOVE:
             raise KeyfileLimitBlocked(
@@ -127,4 +124,13 @@ def build_keyfile_combinations(
                 stacklevel=2,
             )
 
+    sets: list[KeyfileSet] = []
+    for r in range(1, min(max_per_set, n) + 1):
+        for combo in itertools.combinations(entries, r):
+            sets.append(
+                KeyfileSet(
+                    set_id=new_id("kfset"),
+                    entries=list(combo),
+                )
+            )
     return sets
