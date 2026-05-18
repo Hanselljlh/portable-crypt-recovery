@@ -140,8 +140,9 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 import os
                 import subprocess
                 import sys
-                from pathlib import Path
-                docs_path = Path(__file__).parent.parent.parent.parent / "docs" / "user-guide" / "getting-started.md"
+
+                from portable_crypt_recovery.core.paths import app_root_from_cwd
+                docs_path = app_root_from_cwd() / "docs" / "user-guide" / "getting-started.md"
                 if docs_path.exists():
                     if sys.platform == "win32":
                         os.startfile(str(docs_path))

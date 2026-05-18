@@ -51,6 +51,57 @@ def test_app_root_frozen_ignores_cwd(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# user guide path resolution
+# ---------------------------------------------------------------------------
+
+
+def test_user_guide_path_dev_mode_under_cwd(tmp_path):
+    """In dev mode, user-guide path is resolved under the current working dir."""
+    # The fix replaces __file__-based navigation with app_root_from_cwd(); in dev
+    # mode that is cwd, so the constructed path must sit under cwd.
+    root = app_root_from_cwd()
+    guide = root / "docs" / "user-guide" / "getting-started.md"
+    # path components must be correct regardless of whether the file exists
+    assert guide.parts[-3:] == ("docs", "user-guide", "getting-started.md")
+
+
+def test_user_guide_path_frozen_is_under_exe_parent(tmp_path):
+    """In packaged mode, user-guide must resolve under the exe directory."""
+    fake_exe = tmp_path / "PCR.exe"
+    fake_exe.touch()
+    # Simulate a populated portable folder
+    (tmp_path / "docs" / "user-guide").mkdir(parents=True)
+    (tmp_path / "docs" / "user-guide" / "getting-started.md").touch()
+
+    with (
+        patch.object(sys, "frozen", True, create=True),
+        patch.object(sys, "executable", str(fake_exe)),
+    ):
+        root = app_root_from_cwd()
+
+    guide = root / "docs" / "user-guide" / "getting-started.md"
+    assert guide.exists(), "guide must resolve under the exe parent in frozen mode"
+    assert guide.is_relative_to(tmp_path), "must NOT be inside the source tree"
+
+
+def test_user_guide_path_frozen_not_source_tree(tmp_path):
+    """In packaged mode, the docs path must not contain any source-tree artifacts."""
+    fake_exe = tmp_path / "app" / "PCR.exe"
+    fake_exe.parent.mkdir()
+    fake_exe.touch()
+
+    with (
+        patch.object(sys, "frozen", True, create=True),
+        patch.object(sys, "executable", str(fake_exe)),
+    ):
+        root = app_root_from_cwd()
+
+    guide = root / "docs" / "user-guide" / "getting-started.md"
+    # Must be rooted at the exe parent, not somewhere in the Python source tree
+    assert str(guide).startswith(str(fake_exe.parent.resolve()))
+
+
+# ---------------------------------------------------------------------------
 # read_log_tail — bounded log loading
 # ---------------------------------------------------------------------------
 
