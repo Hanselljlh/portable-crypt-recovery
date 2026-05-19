@@ -253,6 +253,12 @@ class JobsView:  # pragma: no cover
                         header_id=header_id,
                         include_legacy=include_legacy,
                     )
+                    # Filter to user-selected modes when strategy is "specific"
+                    if draft.get("hash_mode_strategy") == "specific":
+                        specific_nums = set(draft.get("hash_mode_numbers", []))
+                        mode_set.entries = [
+                            e for e in mode_set.entries if e.mode in specific_nums
+                        ]
                     if not mode_set.entries:
                         continue  # skip headers with no valid modes
 
@@ -455,11 +461,14 @@ class JobsView:  # pragma: no cover
                         line1 = f"{badge}{name}  [{family}]  ·  {hdr_badge}"
 
                         # --- Line 2: settings detail ---
-                        strategy = (
-                            "all modes"
-                            if d.get("hash_mode_strategy") != "current_only"
-                            else "current modes only"
-                        )
+                        _hms = d.get("hash_mode_strategy", "all")
+                        if _hms == "specific":
+                            _n = len(d.get("hash_mode_numbers", []))
+                            strategy = f"{_n} specific mode{'s' if _n != 1 else ''}"
+                        elif _hms == "current_only":
+                            strategy = "current modes only"
+                        else:
+                            strategy = "all modes"
                         pim = (
                             "default PIM"
                             if d.get("pim_mode") == "default"
@@ -546,9 +555,30 @@ class _NewJobDraftDialog:  # pragma: no cover
                 mode_layout = QVBoxLayout(mode_group)
                 self.rad_all = QRadioButton("Try all valid modes (current + legacy) — recommended")
                 self.rad_current = QRadioButton("Current modes only (no legacy)")
+                self.rad_specific = QRadioButton("Select specific modes:")
                 self.rad_all.setChecked(True)
                 mode_layout.addWidget(self.rad_all)
                 mode_layout.addWidget(self.rad_current)
+                mode_layout.addWidget(self.rad_specific)
+                # Checklist for specific-mode selection (hidden until rad_specific is chosen)
+                self.mode_checklist = QListWidget()
+                self.mode_checklist.setMaximumHeight(150)
+                self.mode_checklist.setVisible(False)
+                mode_layout.addWidget(self.mode_checklist)
+                mode_btn_row = QHBoxLayout()
+                self.btn_modes_all = QPushButton("Check All")
+                self.btn_modes_none = QPushButton("Uncheck All")
+                self.btn_modes_vc = QPushButton("VeraCrypt Only")
+                self.btn_modes_tc = QPushButton("TrueCrypt Only")
+                self._mode_btns = [
+                    self.btn_modes_all, self.btn_modes_none,
+                    self.btn_modes_vc, self.btn_modes_tc,
+                ]
+                for _b in self._mode_btns:
+                    mode_btn_row.addWidget(_b)
+                    _b.setVisible(False)
+                mode_btn_row.addStretch()
+                mode_layout.addLayout(mode_btn_row)
                 layout.addWidget(mode_group)
 
                 # PIM
@@ -623,6 +653,11 @@ class _NewJobDraftDialog:  # pragma: no cover
                     lambda checked: self.txt_pim.setEnabled(checked)
                 )
                 self.rad_pw_wordlist.toggled.connect(self._on_pw_type_changed)
+                self.rad_specific.toggled.connect(self._on_mode_strategy_changed)
+                self.btn_modes_all.clicked.connect(lambda: self._set_all_mode_checks(True))
+                self.btn_modes_none.clicked.connect(lambda: self._set_all_mode_checks(False))
+                self.btn_modes_vc.clicked.connect(lambda: self._set_family_mode_checks("veracrypt"))
+                self.btn_modes_tc.clicked.connect(lambda: self._set_family_mode_checks("truecrypt"))
                 self.cmb_target.currentIndexChanged.connect(self._on_target_changed)
 
                 self._load_targets()
@@ -674,6 +709,75 @@ class _NewJobDraftDialog:  # pragma: no cover
                         pass
                 # Default: select all headers
                 self.lst_headers.selectAll()
+                # Rebuild specific-mode checklist when target changes
+                if hasattr(self, "rad_specific") and self.rad_specific.isChecked():
+                    self._rebuild_mode_checklist()
+
+            def _on_mode_strategy_changed(self, checked: bool) -> None:
+                """Show or hide the specific-mode checklist."""
+                self.mode_checklist.setVisible(checked)
+                for _b in self._mode_btns:
+                    _b.setVisible(checked)
+                if checked:
+                    self._rebuild_mode_checklist()
+
+            def _rebuild_mode_checklist(self) -> None:
+                """Populate the mode checklist from the current target + all headers."""
+                from PySide6.QtCore import Qt
+                from PySide6.QtWidgets import QListWidgetItem
+
+                from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                    build_mode_set,
+                )
+
+                self.mode_checklist.clear()
+                tgt = self.cmb_target.currentData()
+                if not tgt:
+                    return
+
+                selected_items = self.lst_headers.selectedItems()
+                header_items = selected_items if selected_items else [
+                    self.lst_headers.item(i) for i in range(self.lst_headers.count())
+                ]
+
+                seen: set[int] = set()
+                for hi in header_items:
+                    h = hi.data(256) if hi else None
+                    if not h:
+                        continue
+                    ctype = getattr(h, "candidate_type", "normal_volume_header")
+                    ms = build_mode_set(
+                        family=tgt.get("container_family", "unknown"),
+                        candidate_type=ctype,
+                        target_id=tgt.get("target_id", ""),
+                        header_id=h.header_id,
+                        include_legacy=True,
+                    )
+                    for entry in ms.entries:
+                        if entry.mode not in seen:
+                            seen.add(entry.mode)
+                            legacy_tag = "  [legacy]" if entry.is_legacy else ""
+                            label = f"{entry.mode:>6}  {entry.label}{legacy_tag}"
+                            item = QListWidgetItem(label)
+                            item.setCheckState(Qt.CheckState.Checked)
+                            item.setData(256, entry)
+                            self.mode_checklist.addItem(item)
+
+            def _set_all_mode_checks(self, checked: bool) -> None:
+                from PySide6.QtCore import Qt
+                state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+                for i in range(self.mode_checklist.count()):
+                    self.mode_checklist.item(i).setCheckState(state)
+
+            def _set_family_mode_checks(self, family: str) -> None:
+                from PySide6.QtCore import Qt
+                for i in range(self.mode_checklist.count()):
+                    item = self.mode_checklist.item(i)
+                    entry = item.data(256)
+                    is_match = entry is not None and entry.family == family
+                    item.setCheckState(
+                        Qt.CheckState.Checked if is_match else Qt.CheckState.Unchecked
+                    )
 
             def _on_pw_type_changed(self, checked: bool) -> None:
                 self.txt_passwords.setEnabled(not checked)
@@ -769,6 +873,31 @@ class _NewJobDraftDialog:  # pragma: no cover
                     ]
                     draft_label = f"{target_name} — {len(header_objs)} headers ({', '.join(type_shorts)})"
 
+                # Resolve hash mode strategy and specific mode list
+                if self.rad_specific.isChecked():
+                    from PySide6.QtCore import Qt as _Qt2
+                    hash_mode_numbers = [
+                        self.mode_checklist.item(i).data(256).mode
+                        for i in range(self.mode_checklist.count())
+                        if (
+                            self.mode_checklist.item(i).checkState() == _Qt2.CheckState.Checked
+                            and self.mode_checklist.item(i).data(256) is not None
+                        )
+                    ]
+                    if not hash_mode_numbers:
+                        QMessageBox.warning(
+                            self, "No Modes Selected",
+                            "Select at least one hash mode before saving."
+                        )
+                        return
+                    hash_mode_strategy = "specific"
+                elif self.rad_current.isChecked():
+                    hash_mode_strategy = "current_only"
+                    hash_mode_numbers = []
+                else:
+                    hash_mode_strategy = "all"
+                    hash_mode_numbers = []
+
                 # Estimate job count (headers × modes per header × pim × kf combos)
                 estimated_job_count = 0
                 try:
@@ -778,18 +907,31 @@ class _NewJobDraftDialog:  # pragma: no cover
                     from portable_crypt_recovery.services.builders.pim_builder import (
                         build_pim_set,
                     )
-                    include_legacy = not self.rad_current.isChecked()
                     total_modes = 0
-                    for h_obj in header_objs:
-                        ctype = getattr(h_obj, "candidate_type", "normal_volume_header")
-                        ms = build_mode_set(
-                            family=tgt.get("container_family", "unknown"),
-                            candidate_type=ctype,
-                            target_id=tgt["target_id"],
-                            header_id=h_obj.header_id,
-                            include_legacy=include_legacy,
-                        )
-                        total_modes += len(ms.entries)
+                    if hash_mode_strategy == "specific":
+                        specific_set = set(hash_mode_numbers)
+                        for h_obj in header_objs:
+                            ctype = getattr(h_obj, "candidate_type", "normal_volume_header")
+                            ms = build_mode_set(
+                                family=tgt.get("container_family", "unknown"),
+                                candidate_type=ctype,
+                                target_id=tgt["target_id"],
+                                header_id=h_obj.header_id,
+                                include_legacy=True,
+                            )
+                            total_modes += sum(1 for e in ms.entries if e.mode in specific_set)
+                    else:
+                        include_legacy = (hash_mode_strategy != "current_only")
+                        for h_obj in header_objs:
+                            ctype = getattr(h_obj, "candidate_type", "normal_volume_header")
+                            ms = build_mode_set(
+                                family=tgt.get("container_family", "unknown"),
+                                candidate_type=ctype,
+                                target_id=tgt["target_id"],
+                                header_id=h_obj.header_id,
+                                include_legacy=include_legacy,
+                            )
+                            total_modes += len(ms.entries)
                     if self.rad_pim_custom.isChecked():
                         pim_set = build_pim_set(
                             self.txt_pim.text().strip(),
@@ -816,7 +958,9 @@ class _NewJobDraftDialog:  # pragma: no cover
                     "header_id": header_ids[0],
                     "family": tgt.get("container_family", "unknown"),
                     "candidate_type": candidate_types[0],
-                    "hash_mode_strategy": "current_only" if self.rad_current.isChecked() else "all",
+                    "hash_mode_strategy": hash_mode_strategy,
+                    # Populated only when strategy == "specific"; empty list otherwise.
+                    "hash_mode_numbers": hash_mode_numbers,
                     "pim_mode": "custom" if self.rad_pim_custom.isChecked() else "default",
                     "pim_raw_input": self.txt_pim.text().strip(),
                     "password_source_type": pw_type,
