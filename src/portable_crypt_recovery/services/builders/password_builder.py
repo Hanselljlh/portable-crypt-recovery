@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
 import warnings
-from itertools import product
 from pathlib import Path
 
 from portable_crypt_recovery.core.ids import new_id
@@ -28,6 +28,71 @@ class PasswordLimitBlocked(Exception):
     pass
 
 
+# All 52 ASCII letters used by the ?C pattern token.
+_LETTERS_A_Z: list[str] = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def expand_pattern_tokens(text: str) -> list[str]:
+    """Expand ``?C`` tokens in *text* to all 52 letter variants.
+
+    Each ``?C`` in the string is independently replaced by every letter
+    a–z and A–Z.  Multiple ``?C`` tokens multiply the result size:
+    ``"?C?C"`` yields 52 × 52 = 2 704 strings.
+
+    If no ``?C`` token is present the original string is returned as-is
+    inside a one-element list.
+    """
+    if "?C" not in text:
+        return [text]
+    parts = text.split("?C")
+    num_tokens = len(parts) - 1
+    results: list[str] = []
+    for combo in itertools.product(_LETTERS_A_Z, repeat=num_tokens):
+        s = parts[0]
+        for i, letter in enumerate(combo):
+            s += letter + parts[i + 1]
+        results.append(s)
+    return dedupe_preserve_order(results)
+
+
+def case_variants(word: str) -> list[str]:
+    """Generate all case combinations for the alphabetic characters in *word*.
+
+    Non-alphabetic characters are preserved in place.  The result is
+    deduped so that words with no alphabetic characters return a single
+    element.
+
+    Example::
+
+        case_variants("a1b") == ["a1b", "a1B", "A1b", "A1B"]
+    """
+    alpha_idx = [i for i, c in enumerate(word) if c.isalpha()]
+    if not alpha_idx:
+        return [word]
+    chars = list(word)
+    results: list[str] = []
+    for combo in itertools.product(*[[chars[i].lower(), chars[i].upper()] for i in alpha_idx]):
+        variant = chars[:]
+        for idx, c in zip(alpha_idx, combo, strict=True):
+            variant[idx] = c
+        results.append("".join(variant))
+    return dedupe_preserve_order(results)
+
+
+def permutation_variants(word: str) -> list[str]:
+    """Generate all unique character permutations of *word*.
+
+    Duplicate permutations (arising from repeated characters) are removed
+    while preserving first-seen order.
+
+    Example::
+
+        permutation_variants("ab") == ["ab", "ba"]
+        permutation_variants("aa") == ["aa"]
+    """
+    return dedupe_preserve_order(["".join(p) for p in itertools.permutations(word)])
+
+
 def dedupe_preserve_order(values: list[str]) -> list[str]:
     seen: set[str] = set()
     output: list[str] = []
@@ -42,7 +107,7 @@ def combine_segments(segments: list[list[str]]) -> list[str]:
     """Combine ordered segment variants and preserve first-seen order."""
     if not segments:
         return []
-    return dedupe_preserve_order(["".join(parts) for parts in product(*segments)])
+    return dedupe_preserve_order(["".join(parts) for parts in itertools.product(*segments)])
 
 
 def count_candidates(segments: list[list[str]]) -> int:

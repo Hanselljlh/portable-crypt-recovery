@@ -3,14 +3,18 @@
 import pytest
 
 from portable_crypt_recovery.services.builders.password_builder import (
+    PasswordLimitBlocked,
     PasswordLimitConfirmRequired,
     PasswordLimitWarning,
     build_generated_password_source,
     build_manual_password_source,
     build_wordlist_source,
+    case_variants,
     combine_segments,
     count_candidates,
     dedupe_preserve_order,
+    expand_pattern_tokens,
+    permutation_variants,
 )
 
 
@@ -115,3 +119,113 @@ def test_password_limit_force_bypass(tmp_path):
     passwords = [str(i) for i in range(1_000_001)]
     src = build_manual_password_source(passwords, ws, force=True)
     assert src.candidate_count == 1_000_001
+
+
+def test_password_limit_blocked(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    passwords = [str(i) for i in range(10_000_001)]
+    with pytest.raises(PasswordLimitBlocked):
+        build_manual_password_source(passwords, ws)
+
+
+def test_password_limit_force_bypasses_block(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    passwords = [str(i) for i in range(10_000_001)]
+    src = build_manual_password_source(passwords, ws, force=True)
+    assert src.candidate_count == 10_000_001
+
+
+# ---------------------------------------------------------------------------
+# expand_pattern_tokens — ?C token expansion
+# ---------------------------------------------------------------------------
+
+
+def test_expand_pattern_tokens_no_token():
+    assert expand_pattern_tokens("hello") == ["hello"]
+
+
+def test_expand_pattern_tokens_single_token():
+    results = expand_pattern_tokens("?C")
+    # 52 letters a-z + A-Z
+    assert len(results) == 52
+    assert "a" in results
+    assert "Z" in results
+
+
+def test_expand_pattern_tokens_embedded():
+    results = expand_pattern_tokens("pa?Cs")
+    assert len(results) == 52
+    assert "paas" in results
+    assert "paZs" in results
+
+
+def test_expand_pattern_tokens_two_tokens():
+    results = expand_pattern_tokens("?C?C")
+    assert len(results) == 52 * 52
+    assert "aa" in results
+    assert "ZZ" in results
+
+
+def test_expand_pattern_tokens_no_duplicates():
+    # No char appears in both lower and upper for same slot
+    results = expand_pattern_tokens("?C")
+    assert len(results) == len(set(results))
+
+
+# ---------------------------------------------------------------------------
+# case_variants
+# ---------------------------------------------------------------------------
+
+
+def test_case_variants_basic():
+    variants = case_variants("ab")
+    assert set(variants) == {"ab", "aB", "Ab", "AB"}
+    # Order: first-seen from itertools.product (lower, upper) x (lower, upper)
+    assert variants[0] == "ab"
+
+
+def test_case_variants_no_alpha():
+    assert case_variants("123") == ["123"]
+
+
+def test_case_variants_mixed():
+    variants = case_variants("a1b")
+    assert set(variants) == {"a1b", "a1B", "A1b", "A1B"}
+
+
+def test_case_variants_single_char():
+    assert set(case_variants("x")) == {"x", "X"}
+
+
+def test_case_variants_dedup_all_same():
+    # All digits → no alpha → single result
+    assert case_variants("999") == ["999"]
+
+
+# ---------------------------------------------------------------------------
+# permutation_variants
+# ---------------------------------------------------------------------------
+
+
+def test_permutation_variants_basic():
+    variants = permutation_variants("ab")
+    assert set(variants) == {"ab", "ba"}
+
+
+def test_permutation_variants_dedup_repeated_chars():
+    # "aa" has only one unique permutation
+    assert permutation_variants("aa") == ["aa"]
+
+
+def test_permutation_variants_three_chars():
+    variants = permutation_variants("abc")
+    assert len(variants) == 6
+    assert "abc" in variants
+    assert "cba" in variants
+
+
+def test_permutation_variants_order_preserved():
+    # First permutation must be the original order
+    assert permutation_variants("xyz")[0] == "xyz"

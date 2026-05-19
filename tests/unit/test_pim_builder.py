@@ -3,6 +3,7 @@
 import pytest
 
 from portable_crypt_recovery.services.builders.pim_builder import (
+    PimLimitBlocked,
     PimLimitConfirmRequired,
     PimLimitWarning,
     build_default_pim_set,
@@ -85,3 +86,20 @@ def test_force_bypasses_confirm(tmp_path):
     values = ", ".join(str(i) for i in range(1, 1002))
     ps = build_pim_set(values, workspace_root=tmp_path, force=True)
     assert len(ps.values) == 1001
+
+
+def test_blocked_above_10000(tmp_path):
+    values = ", ".join(str(i) for i in range(1, 10_002))
+    with pytest.raises(PimLimitBlocked):
+        build_pim_set(values, workspace_root=tmp_path)
+
+
+def test_force_bypasses_block(tmp_path):
+    values = ", ".join(str(i) for i in range(1, 10_002))
+    ps = build_pim_set(values, workspace_root=tmp_path, force=True)
+    assert len(ps.values) == 10_001
+
+
+def test_reject_zero_in_range():
+    with pytest.raises(ValueError):
+        expand_pim_input("0-5")

@@ -179,3 +179,50 @@ def test_force_bypasses_block():
     # Should not raise even though count > _BLOCK_ABOVE
     combos = build_keyfile_combinations(entries, max_per_set=17, force=True)
     assert len(combos) == (2**17 - 1)
+
+
+# ---------------------------------------------------------------------------
+# Acceptance tests: combinations vs permutations, source not modified
+# ---------------------------------------------------------------------------
+
+
+def test_build_keyfile_combinations_not_permutations(tmp_path):
+    """3 keyfiles → 7 sets (C(3,1)+C(3,2)+C(3,3)), not 15 (permutations)."""
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    entries = []
+    for i in range(3):
+        src = tmp_path / f"k{i}.bin"
+        src.write_bytes(f"key{i}".encode())
+        entries.append(import_keyfile(src, ws))
+
+    combos = build_keyfile_combinations(entries, max_per_set=3)
+    assert len(combos) == 7  # 3 + 3 + 1
+
+
+def test_build_keyfile_combinations_no_duplicates(tmp_path):
+    """Each combination set must have a unique set_id."""
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    entries = []
+    for i in range(3):
+        src = tmp_path / f"k{i}.bin"
+        src.write_bytes(f"key{i}".encode())
+        entries.append(import_keyfile(src, ws))
+
+    combos = build_keyfile_combinations(entries, max_per_set=3)
+    set_ids = [c.set_id for c in combos]
+    assert len(set_ids) == len(set(set_ids))
+
+
+def test_import_keyfile_does_not_modify_source(tmp_path):
+    """The original keyfile must be untouched after import."""
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    source = tmp_path / "key.bin"
+    original_bytes = b"sensitive keyfile data"
+    source.write_bytes(original_bytes)
+
+    import_keyfile(source, ws)
+
+    assert source.read_bytes() == original_bytes
