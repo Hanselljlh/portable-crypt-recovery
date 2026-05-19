@@ -23,13 +23,16 @@ class JobsView:  # pragma: no cover
 
                 toolbar = QHBoxLayout()
                 self.btn_new = QPushButton("New Job Draft...")
+                self.btn_edit = QPushButton("Edit...")
+                self.btn_duplicate = QPushButton("Duplicate")
                 self.btn_expand = QPushButton("Send to Queue")
                 self.btn_delete = QPushButton("Delete Selected")
                 self.btn_delete_all = QPushButton("Delete All")
-                toolbar.addWidget(self.btn_new)
-                toolbar.addWidget(self.btn_expand)
-                toolbar.addWidget(self.btn_delete)
-                toolbar.addWidget(self.btn_delete_all)
+                for _b in [
+                    self.btn_new, self.btn_edit, self.btn_duplicate,
+                    self.btn_expand, self.btn_delete, self.btn_delete_all,
+                ]:
+                    toolbar.addWidget(_b)
                 toolbar.addStretch()
                 layout.addLayout(toolbar)
 
@@ -48,6 +51,8 @@ class JobsView:  # pragma: no cover
                 layout.addWidget(info)
 
                 self.btn_new.clicked.connect(self._new_draft)
+                self.btn_edit.clicked.connect(self._edit_draft)
+                self.btn_duplicate.clicked.connect(self._duplicate_draft)
                 self.btn_expand.clicked.connect(self._expand_to_queue)
                 self.btn_delete.clicked.connect(self._delete_draft)
                 self.btn_delete_all.clicked.connect(self._delete_all_drafts)
@@ -85,6 +90,104 @@ class JobsView:  # pragma: no cover
                     f"Job draft '{dlg.draft.get('label', '')}' saved.\n"
                     "Select it and click 'Expand to Queue' to generate queue jobs.",
                 )
+
+            # ------------------------------------------------------------------
+            # Duplicate draft
+            # ------------------------------------------------------------------
+
+            def _duplicate_draft(self) -> None:
+                import copy
+
+                from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.core.ids import new_id
+                from portable_crypt_recovery.core.timestamps import utc_now_iso
+
+                selected = self.job_list.selectedItems()
+                if not selected:
+                    QMessageBox.information(self, "Duplicate", "Select a draft first.")
+                    return
+                if len(selected) > 1:
+                    QMessageBox.information(
+                        self, "Duplicate", "Select one draft to duplicate."
+                    )
+                    return
+                draft = selected[0].data(256)
+                if not draft:
+                    return
+
+                new_draft = copy.deepcopy(draft)
+                new_draft["draft_id"] = new_id("draft")
+                new_draft["label"] = draft.get("label", "draft") + " (copy)"
+                new_draft["created_timestamp"] = utc_now_iso()
+                new_draft.pop("sent", None)
+                new_draft.pop("sent_job_count", None)
+
+                state = get_app_state()
+                self._save_draft(new_draft, state)
+                self._refresh_list()
+
+            # ------------------------------------------------------------------
+            # Edit draft
+            # ------------------------------------------------------------------
+
+            def _edit_draft(self) -> None:
+                from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+
+                selected = self.job_list.selectedItems()
+                if not selected:
+                    QMessageBox.information(self, "Edit", "Select a draft to edit.")
+                    return
+                if len(selected) > 1:
+                    QMessageBox.information(
+                        self, "Edit", "Select one draft to edit."
+                    )
+                    return
+                draft = selected[0].data(256)
+                if not draft:
+                    return
+
+                state = get_app_state()
+                dlg = _NewJobDraftDialog(
+                    parent=self,
+                    workspace_root=state.workspace_root,
+                    draft_data=draft,
+                )
+                if dlg.exec() != 1 or dlg.draft is None:
+                    return
+
+                # Preserve sent status when updating a sent draft
+                if draft.get("sent"):
+                    dlg.draft.setdefault("sent", True)
+                    dlg.draft.setdefault("sent_job_count", draft.get("sent_job_count", 0))
+
+                self._replace_draft(draft["draft_id"], dlg.draft, state)
+                self._refresh_list()
+
+            def _replace_draft(self, old_draft_id: str, new_draft: dict, state) -> None:
+                import json
+
+                from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
+                drafts_file = state.workspace_root / "jobs" / "drafts.json"
+                try:
+                    data = json.loads(drafts_file.read_text(encoding="utf-8"))
+                    drafts = data.get("drafts", [])
+                    replaced = False
+                    for i, d in enumerate(drafts):
+                        if d.get("draft_id") == old_draft_id:
+                            drafts[i] = new_draft
+                            replaced = True
+                            break
+                    if not replaced:
+                        drafts.append(new_draft)
+                    data["drafts"] = drafts
+                    atomic_write_json(drafts_file, data)
+                except Exception:
+                    pass
 
             def _save_draft(self, draft: dict, state) -> None:
                 import json
@@ -239,7 +342,8 @@ class JobsView:  # pragma: no cover
 
                 all_jobs: list = []
                 for header_id in header_ids:
-                    # Resolve candidate_type from stored metadata
+                    # Resolve candidate_type and per-header hints from stored metadata
+                    header_meta = None
                     try:
                         header_meta = load_header_metadata(ws, header_id)
                         candidate_type = header_meta.candidate_type
@@ -259,6 +363,18 @@ class JobsView:  # pragma: no cover
                         mode_set.entries = [
                             e for e in mode_set.entries if e.mode in specific_nums
                         ]
+                    # Apply per-header KDF/XTS hints stored at extraction time
+                    if header_meta is not None and (
+                        header_meta.known_kdfs or header_meta.known_xts_sizes
+                    ):
+                        from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                            filter_by_hints,
+                        )
+                        filter_by_hints(
+                            mode_set,
+                            header_meta.known_kdfs,
+                            header_meta.known_xts_sizes,
+                        )
                     if not mode_set.entries:
                         continue  # skip headers with no valid modes
 
@@ -503,7 +619,7 @@ class JobsView:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 class _NewJobDraftDialog:  # pragma: no cover
-    def __new__(cls, parent=None, workspace_root=None):
+    def __new__(cls, parent=None, workspace_root=None, draft_data=None):
         from PySide6.QtWidgets import (
             QComboBox,
             QDialog,
@@ -521,12 +637,13 @@ class _NewJobDraftDialog:  # pragma: no cover
         )
 
         class _Dlg(QDialog):
-            def __init__(self, parent=None, workspace_root=None) -> None:
+            def __init__(self, parent=None, workspace_root=None, draft_data=None) -> None:
                 super().__init__(parent)
-                self.setWindowTitle("New Job Draft")
-                self.resize(680, 700)
                 self._workspace_root = workspace_root
                 self.draft = None
+                is_edit = draft_data is not None
+                self.setWindowTitle("Edit Job Draft" if is_edit else "New Job Draft")
+                self.resize(680, 720)
 
                 layout = QVBoxLayout(self)
 
@@ -661,6 +778,8 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self.cmb_target.currentIndexChanged.connect(self._on_target_changed)
 
                 self._load_targets()
+                if draft_data:
+                    self._prefill(draft_data)
 
             def _load_targets(self) -> None:
                 import json
@@ -778,6 +897,69 @@ class _NewJobDraftDialog:  # pragma: no cover
                     item.setCheckState(
                         Qt.CheckState.Checked if is_match else Qt.CheckState.Unchecked
                     )
+
+            def _prefill(self, draft: dict) -> None:
+                """Pre-fill dialog fields from an existing draft dict (for Edit mode)."""
+                from PySide6.QtCore import Qt
+                from PySide6.QtWidgets import QListWidgetItem
+
+                # --- Target ---
+                target_id = draft.get("target_id", "")
+                for i in range(self.cmb_target.count()):
+                    t = self.cmb_target.itemData(i)
+                    if t and t.get("target_id") == target_id:
+                        self.cmb_target.setCurrentIndex(i)  # triggers _on_target_changed
+                        break
+
+                # --- Headers ---
+                wanted_ids = set(
+                    draft.get("header_ids")
+                    or ([draft["header_id"]] if draft.get("header_id") else [])
+                )
+                for i in range(self.lst_headers.count()):
+                    item = self.lst_headers.item(i)
+                    h = item.data(256)
+                    item.setSelected(h is not None and h.header_id in wanted_ids)
+
+                # --- Hash mode strategy ---
+                strat = draft.get("hash_mode_strategy", "all")
+                if strat == "current_only":
+                    self.rad_current.setChecked(True)
+                elif strat == "specific":
+                    self.rad_specific.setChecked(True)   # triggers _rebuild_mode_checklist
+                    mode_nums = set(draft.get("hash_mode_numbers", []))
+                    for i in range(self.mode_checklist.count()):
+                        item = self.mode_checklist.item(i)
+                        entry = item.data(256)
+                        item.setCheckState(
+                            Qt.CheckState.Checked
+                            if (entry and entry.mode in mode_nums)
+                            else Qt.CheckState.Unchecked
+                        )
+                else:
+                    self.rad_all.setChecked(True)
+
+                # --- PIM ---
+                if draft.get("pim_mode") == "custom":
+                    self.rad_pim_custom.setChecked(True)
+                    self.txt_pim.setText(draft.get("pim_raw_input", ""))
+                else:
+                    self.rad_pim_default.setChecked(True)
+
+                # --- Password source ---
+                if draft.get("password_source_type") == "wordlist":
+                    self.rad_pw_wordlist.setChecked(True)
+                    self.txt_wordlist.setText(draft.get("password_wordlist_path", ""))
+                else:
+                    self.rad_pw_manual.setChecked(True)
+                    self.txt_passwords.setPlainText(draft.get("password_manual_text", ""))
+
+                # --- Keyfiles ---
+                self.kf_list.clear()
+                for path in draft.get("keyfile_paths", []):
+                    item = QListWidgetItem(path)
+                    item.setData(256, path)
+                    self.kf_list.addItem(item)
 
             def _on_pw_type_changed(self, checked: bool) -> None:
                 self.txt_passwords.setEnabled(not checked)
@@ -972,4 +1154,4 @@ class _NewJobDraftDialog:  # pragma: no cover
                 }
                 self.accept()
 
-        return _Dlg(parent, workspace_root)
+        return _Dlg(parent, workspace_root, draft_data)

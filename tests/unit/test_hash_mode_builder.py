@@ -1,7 +1,9 @@
 """Tests for the hash mode builder."""
 
 from portable_crypt_recovery.services.builders.hash_mode_builder import (
+    TRUECRYPT_UNSUPPORTED_KDFS,
     build_mode_set,
+    filter_by_hints,
     system_modes,
     truecrypt_only_modes,
     try_all_valid,
@@ -91,3 +93,107 @@ def test_hidden_volume_uses_nonsystem_modes():
     modes = {e.mode for e in ms.entries}
     boot_modes = system_modes()
     assert modes.isdisjoint(boot_modes)
+
+
+# ---------------------------------------------------------------------------
+# filter_by_hints
+# ---------------------------------------------------------------------------
+
+
+def test_filter_by_hints_empty_lists_no_change():
+    """Empty hint lists must not remove any entries."""
+    ms = build_mode_set("both", "normal_volume_header")
+    original_count = len(ms.entries)
+    filter_by_hints(ms, [], [])
+    assert len(ms.entries) == original_count
+
+
+def test_filter_by_hints_kdf_sha512_only():
+    ms = build_mode_set("both", "normal_volume_header")
+    filter_by_hints(ms, ["sha512"], [])
+    assert all("SHA512" in e.label for e in ms.entries)
+    assert len(ms.entries) > 0
+
+
+def test_filter_by_hints_kdf_ripemd160_only():
+    ms = build_mode_set("both", "normal_volume_header")
+    filter_by_hints(ms, ["ripemd160"], [])
+    assert all("RIPEMD160" in e.label for e in ms.entries)
+
+
+def test_filter_by_hints_xts_single_only():
+    ms = build_mode_set("both", "normal_volume_header")
+    filter_by_hints(ms, [], [512])
+    assert all("XTS 512" in e.label for e in ms.entries)
+    assert all("XTS 1024" not in e.label for e in ms.entries)
+    assert all("XTS 1536" not in e.label for e in ms.entries)
+
+
+def test_filter_by_hints_combined():
+    """SHA-512 + XTS 512 should yield exactly one VeraCrypt + one TrueCrypt entry (current)."""
+    ms = build_mode_set("both", "normal_volume_header", include_legacy=False)
+    filter_by_hints(ms, ["sha512"], [512])
+    labels = [e.label for e in ms.entries]
+    assert all("SHA512" in lbl and "XTS 512" in lbl for lbl in labels)
+
+
+def test_filter_by_hints_mutates_in_place():
+    ms = build_mode_set("veracrypt", "normal_volume_header")
+    before_id = ms.mode_set_id
+    filter_by_hints(ms, ["whirlpool"], [])
+    assert ms.mode_set_id == before_id  # same object
+    assert all("Whirlpool" in e.label for e in ms.entries)
+
+
+def test_truecrypt_unsupported_kdfs_constant():
+    """SHA-256 and Streebog-512 must be listed as TrueCrypt-unsupported."""
+    assert "sha256" in TRUECRYPT_UNSUPPORTED_KDFS
+    assert "streebog512" in TRUECRYPT_UNSUPPORTED_KDFS
+
+
+# ---------------------------------------------------------------------------
+# Header model — known_kdfs / known_xts_sizes round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_header_hints_roundtrip():
+    from portable_crypt_recovery.core.ids import new_id
+    from portable_crypt_recovery.core.timestamps import utc_now_iso
+    from portable_crypt_recovery.models.header import Header
+
+    h = Header(
+        header_id=new_id("header"),
+        target_id="t_001",
+        source_type="extracted",
+        workspace_relative_path="headers/normalized/x.bin",
+        size_bytes=512,
+        sha256="a" * 64,
+        extraction_timestamp=utc_now_iso(),
+        known_kdfs=["sha512", "ripemd160"],
+        known_xts_sizes=[512],
+    )
+    d = h.to_dict()
+    assert d["known_kdfs"] == ["sha512", "ripemd160"]
+    assert d["known_xts_sizes"] == [512]
+
+    h2 = Header.from_dict(d)
+    assert h2.known_kdfs == ["sha512", "ripemd160"]
+    assert h2.known_xts_sizes == [512]
+
+
+def test_header_hints_default_empty():
+    """Existing headers without hint fields must load with empty lists."""
+    from portable_crypt_recovery.models.header import Header
+
+    legacy_dict = {
+        "header_id": "header_x",
+        "target_id": "t_001",
+        "source_type": "extracted",
+        "workspace_relative_path": "headers/normalized/x.bin",
+        "size_bytes": 512,
+        "sha256": "a" * 64,
+        "extraction_timestamp": "2024-01-01T00:00:00Z",
+    }
+    h = Header.from_dict(legacy_dict)
+    assert h.known_kdfs == []
+    assert h.known_xts_sizes == []

@@ -14,6 +14,9 @@ class WizardResult:
     extract_normal: bool
     extract_hidden: bool
     extract_system: bool
+    # Optional recovery hints — empty lists mean "unknown / try all"
+    known_kdfs: list          # subset of ["sha512","ripemd160","sha256","whirlpool","streebog512"]
+    known_xts_sizes: list     # subset of [512, 1024, 1536]
 
 
 class AddVolumeWizard:  # pragma: no cover
@@ -38,7 +41,7 @@ class AddVolumeWizard:  # pragma: no cover
             def __init__(self, parent=None) -> None:
                 super().__init__(parent)
                 self.setWindowTitle("Add Volume")
-                self.resize(620, 460)
+                self.resize(620, 620)
                 self.result_data: WizardResult | None = None
                 layout = QVBoxLayout(self)
 
@@ -116,9 +119,64 @@ class AddVolumeWizard:  # pragma: no cover
                 extract_layout.addWidget(lbl_extract_note)
                 layout.addWidget(extract_group)
 
+                # Recovery hints (optional)
+                hint_group = QGroupBox("Recovery Hints (optional — leave all checked if unsure)")
+                hint_layout = QVBoxLayout(hint_group)
+
+                # KDF / Hash row
+                hint_layout.addWidget(QLabel(
+                    "KDF / Hash  —  uncheck any you know this volume does NOT use:"
+                ))
+                kdf_row1 = QHBoxLayout()
+                kdf_row2 = QHBoxLayout()
+                self.chk_sha512 = QCheckBox("SHA-512")
+                self.chk_ripemd160 = QCheckBox("RIPEMD-160")
+                self.chk_sha256 = QCheckBox("SHA-256")
+                self.chk_whirlpool = QCheckBox("Whirlpool")
+                self.chk_streebog512 = QCheckBox("Streebog-512")
+                for cb in [self.chk_sha512, self.chk_ripemd160, self.chk_sha256]:
+                    cb.setChecked(True)
+                    kdf_row1.addWidget(cb)
+                kdf_row1.addStretch()
+                for cb in [self.chk_whirlpool, self.chk_streebog512]:
+                    cb.setChecked(True)
+                    kdf_row2.addWidget(cb)
+                kdf_row2.addStretch()
+                hint_layout.addLayout(kdf_row1)
+                hint_layout.addLayout(kdf_row2)
+                lbl_vc_only = QLabel(
+                    "SHA-256 and Streebog-512 are VeraCrypt only.  "
+                    "TrueCrypt system volumes use RIPEMD-160 only."
+                )
+                lbl_vc_only.setStyleSheet("color: gray; font-size: 11px;")
+                hint_layout.addWidget(lbl_vc_only)
+
+                # XTS size / cipher cascade row
+                hint_layout.addWidget(QLabel(
+                    "Cipher cascade  —  uncheck sizes you know this volume does NOT use:"
+                ))
+                xts_row = QHBoxLayout()
+                self.chk_xts512 = QCheckBox("Single cipher  (XTS 512-bit)")
+                self.chk_xts1024 = QCheckBox("Two-cipher cascade  (XTS 1024-bit)")
+                self.chk_xts1536 = QCheckBox("Three-cipher cascade  (XTS 1536-bit)")
+                for cb in [self.chk_xts512, self.chk_xts1024, self.chk_xts1536]:
+                    cb.setChecked(True)
+                    xts_row.addWidget(cb)
+                xts_row.addStretch()
+                hint_layout.addLayout(xts_row)
+                lbl_xts_note = QLabel(
+                    "Single cipher (AES / Serpent / Twofish) is the most common choice."
+                )
+                lbl_xts_note.setStyleSheet("color: gray; font-size: 11px;")
+                hint_layout.addWidget(lbl_xts_note)
+
+                layout.addWidget(hint_group)
+
                 # Connect source type to hide/show extraction options
                 self.cmb_source_type.currentIndexChanged.connect(self._on_source_type_changed)
+                self.cmb_family.currentIndexChanged.connect(self._on_family_changed)
                 self._on_source_type_changed(0)
+                self._on_family_changed(0)
 
                 # Buttons
                 buttons = QDialogButtonBox(
@@ -133,6 +191,22 @@ class AddVolumeWizard:  # pragma: no cover
                 self.chk_normal.setEnabled(not is_preextracted)
                 self.chk_hidden.setEnabled(not is_preextracted)
                 self.chk_system.setEnabled(not is_preextracted)
+
+            def _on_family_changed(self, index: int) -> None:
+                """Wire VeraCrypt/TrueCrypt constraints to KDF checkboxes.
+
+                TrueCrypt does not support SHA-256 or Streebog-512.
+                When TrueCrypt is selected those are disabled and unchecked.
+                """
+                # index 0=Unknown, 1=VeraCrypt, 2=TrueCrypt
+                is_truecrypt = (index == 2)
+                for cb in [self.chk_sha256, self.chk_streebog512]:
+                    if is_truecrypt:
+                        cb.setChecked(False)
+                        cb.setEnabled(False)
+                    else:
+                        cb.setEnabled(True)
+                        cb.setChecked(True)
 
             def _browse_file(self) -> None:
                 path, _ = QFileDialog.getOpenFileName(
@@ -173,6 +247,37 @@ class AddVolumeWizard:  # pragma: no cover
                 }
 
                 is_preextracted = (source_idx == 2)
+
+                # Collect KDF hints — empty = try all
+                _kdf_map = {
+                    "sha512": self.chk_sha512,
+                    "ripemd160": self.chk_ripemd160,
+                    "sha256": self.chk_sha256,
+                    "whirlpool": self.chk_whirlpool,
+                    "streebog512": self.chk_streebog512,
+                }
+                enabled_kdfs = {k for k, cb in _kdf_map.items() if cb.isEnabled()}
+                checked_kdfs = {k for k, cb in _kdf_map.items() if cb.isEnabled() and cb.isChecked()}
+                if not checked_kdfs:
+                    QMessageBox.warning(
+                        self, "No KDF Selected",
+                        "Select at least one KDF / Hash, or leave all checked to try all."
+                    )
+                    return
+                # All enabled KDFs checked = no filter (same as unknown)
+                known_kdfs = [] if checked_kdfs == enabled_kdfs else sorted(checked_kdfs)
+
+                # Collect XTS size hints — empty = try all
+                _xts_map = {512: self.chk_xts512, 1024: self.chk_xts1024, 1536: self.chk_xts1536}
+                checked_xts = {s for s, cb in _xts_map.items() if cb.isChecked()}
+                if not checked_xts:
+                    QMessageBox.warning(
+                        self, "No Cipher Selected",
+                        "Select at least one cipher cascade size, or leave all checked to try all."
+                    )
+                    return
+                known_xts_sizes = [] if len(checked_xts) == 3 else sorted(checked_xts)
+
                 self.result_data = WizardResult(
                     source_path=path,
                     source_type=source_type_map.get(source_idx, "unknown"),
@@ -180,6 +285,8 @@ class AddVolumeWizard:  # pragma: no cover
                     extract_normal=True if is_preextracted else self.chk_normal.isChecked(),
                     extract_hidden=False if is_preextracted else self.chk_hidden.isChecked(),
                     extract_system=False if is_preextracted else self.chk_system.isChecked(),
+                    known_kdfs=known_kdfs,
+                    known_xts_sizes=known_xts_sizes,
                 )
                 self.accept()
 

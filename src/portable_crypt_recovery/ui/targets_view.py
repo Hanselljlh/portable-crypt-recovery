@@ -169,6 +169,8 @@ class TargetsView:  # pragma: no cover
                             sha256=candidate.sha256,
                             extraction_timestamp=now,
                             candidate_type=candidate.candidate_type,
+                            known_kdfs=result.known_kdfs,
+                            known_xts_sizes=result.known_xts_sizes,
                         )
                         extracted_headers.append(header)
 

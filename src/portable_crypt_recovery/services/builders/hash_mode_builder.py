@@ -318,6 +318,54 @@ def try_all_valid(
     )
 
 
+# ---------------------------------------------------------------------------
+# KDF and XTS hint filtering
+# ---------------------------------------------------------------------------
+
+# Maps the user-facing KDF identifier to a substring that appears in every
+# matching entry label in the mode tables above.
+KDF_LABEL_MAP: dict[str, str] = {
+    "sha512": "SHA512",
+    "ripemd160": "RIPEMD160",
+    "sha256": "SHA256",
+    "whirlpool": "Whirlpool",
+    "streebog512": "Streebog",
+}
+
+# Maps XTS key-size (int, bits) to the substring that appears in labels.
+XTS_LABEL_MAP: dict[int, str] = {
+    512: "XTS 512",
+    1024: "XTS 1024",
+    1536: "XTS 1536",
+}
+
+# KDFs that are not valid for TrueCrypt (used by wizard constraint wiring).
+TRUECRYPT_UNSUPPORTED_KDFS: frozenset[str] = frozenset({"sha256", "streebog512"})
+
+
+def filter_by_hints(
+    mode_set: HashModeSet,
+    known_kdfs: list[str],
+    known_xts_sizes: list[int],
+) -> None:
+    """Filter *mode_set.entries* in-place by KDF and XTS hints.
+
+    Empty lists mean "no filter" — all entries pass.
+    """
+    if known_kdfs:
+        keep = {KDF_LABEL_MAP[k] for k in known_kdfs if k in KDF_LABEL_MAP}
+        if keep:
+            mode_set.entries = [
+                e for e in mode_set.entries if any(kw in e.label for kw in keep)
+            ]
+    if known_xts_sizes:
+        keep = {XTS_LABEL_MAP[s] for s in known_xts_sizes if s in XTS_LABEL_MAP}
+        if keep:
+            mode_set.entries = [
+                e for e in mode_set.entries if any(kw in e.label for kw in keep)
+            ]
+
+
 def veracrypt_only_modes() -> frozenset[int]:
     """Return mode numbers that are only valid for VeraCrypt (not TrueCrypt)."""
     return _VC_ONLY_MODES

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 HEADER_SIZE_BYTES = 512
@@ -23,6 +23,12 @@ class Header:
     # | "hidden_system_candidate" | "unknown_imported_header"
     candidate_type: str = "unknown"
     notes: str = ""
+    # Optional recovery hints — narrow down which Hashcat modes are tried.
+    # Empty list = no filter = try all.  Values: "sha512" "ripemd160" "sha256"
+    # "whirlpool" "streebog512"
+    known_kdfs: list = field(default_factory=list)
+    # Empty list = try all.  Values: 512 1024 1536  (XTS key size in bits)
+    known_xts_sizes: list = field(default_factory=list)
 
     def validate_size(self) -> None:
         """Raise ValueError if header is not exactly 512 bytes."""
@@ -43,6 +49,8 @@ class Header:
             "extraction_timestamp": self.extraction_timestamp,
             "candidate_type": self.candidate_type,
             "notes": self.notes,
+            "known_kdfs": self.known_kdfs,
+            "known_xts_sizes": self.known_xts_sizes,
         }
 
     @classmethod
@@ -57,4 +65,6 @@ class Header:
             extraction_timestamp=data.get("extraction_timestamp", ""),
             candidate_type=data.get("candidate_type", "unknown"),
             notes=data.get("notes", ""),
+            known_kdfs=data.get("known_kdfs", []),
+            known_xts_sizes=data.get("known_xts_sizes", []),
         )
