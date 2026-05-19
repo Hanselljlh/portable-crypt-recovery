@@ -200,12 +200,15 @@ def build_command(
     # having duplicate log files scattered in tools/hashcat/ is confusing.
     args += ["--logfile-disable"]
 
-    # PIM handling
-    if job.pim_mode == "custom" and job.pim_value is not None:
-        args += [
-            "--veracrypt-pim-start", str(job.pim_value),
-            "--veracrypt-pim-stop", str(job.pim_value),
-        ]
+    # PIM handling — pim_start/pim_stop define a range; pim_value is the single-PIM fallback
+    if job.pim_mode == "custom":
+        pim_start = job.pim_start if job.pim_start is not None else job.pim_value
+        pim_stop = job.pim_stop if job.pim_stop is not None else job.pim_value
+        if pim_start is not None and pim_stop is not None:
+            args += [
+                "--veracrypt-pim-start", str(pim_start),
+                "--veracrypt-pim-stop", str(pim_stop),
+            ]
 
     # Keyfile handling — workspace-local keyfiles only.
     # Hashcat uses --veracrypt-keyfiles (VeraCrypt modes 13711-13783, 29411-29483)

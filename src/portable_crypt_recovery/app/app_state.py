@@ -90,6 +90,8 @@ class AppState:
             self.hashcat_setup.use_cpu_opencl = bool(settings["use_cpu_opencl"])
         if "ignore_cuda" in settings:
             self.hashcat_setup.ignore_cuda = bool(settings["ignore_cuda"])
+        if "batch_adjacent_pims" in settings:
+            self.hashcat_setup.batch_adjacent_pims = bool(settings["batch_adjacent_pims"])
 
 
 # Module-level singleton

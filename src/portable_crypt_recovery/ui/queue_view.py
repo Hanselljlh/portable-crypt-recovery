@@ -301,6 +301,25 @@ class QueueView:  # pragma: no cover
                 # Save updated command arrays back to disk
                 atomic_write_json(queue_file, qs.to_dict())
 
+                # Startup waste warning
+                if pending:
+                    from portable_crypt_recovery.services.hashcat.startup_estimator import (
+                        queue_efficiency_report,
+                    )
+                    report = queue_efficiency_report(pending)
+                    if report["warn"]:
+                        _reply = QMessageBox.question(
+                            self,
+                            "Startup Overhead Warning",
+                            report["message"] + "\n\nStart queue anyway?",
+                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                            QMessageBox.StandardButton.Yes,
+                        )
+                        if _reply != QMessageBox.StandardButton.Yes:
+                            progress.close()
+                            self._update_button_states("stopped")
+                            return
+
                 self._runner = QueueRunner(
                     workspace_root=ws,
                     queue_state=qs,

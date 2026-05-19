@@ -417,6 +417,19 @@ class JobsView:  # pragma: no cover
                 if not all_jobs:
                     raise ValueError("No hash modes available for any selected header.")
 
+                # Optional: collapse adjacent PIM tasks into range tasks
+                if state.hashcat_setup.batch_adjacent_pims:
+                    from portable_crypt_recovery.services.builders.pim_range_grouper import (
+                        group_adjacent_pim_ranges,
+                    )
+                    all_jobs = group_adjacent_pim_ranges(all_jobs)
+                    # Re-register ranged tasks in queue state (they replaced originals)
+                    qs.tasks = {}
+                    qs.task_order = []
+                    for task in all_jobs:
+                        qs.tasks[task.task_id] = task
+                        qs.task_order.append(task.task_id)
+
                 atomic_write_json(queue_file, qs.to_dict())
                 return len(all_jobs)
 

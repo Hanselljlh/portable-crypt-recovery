@@ -12,6 +12,7 @@ from portable_crypt_recovery.models.task import QueuedTask
 from portable_crypt_recovery.services.hashcat.command_builder import (
     CommandBuilderError,
     build_command,
+    build_command_with_devices,
 )
 from portable_crypt_recovery.services.headers.metadata import save_header_metadata
 
@@ -474,3 +475,92 @@ def test_tc_current_substituted_to_legacy_when_ignore_cuda(tmp_path):
     assert args[m_idx + 1] == "6211", (
         "29311 should be substituted to 6211 when CUDA is ignored"
     )
+
+
+# ---------------------------------------------------------------------------
+# PIM range (pim_start / pim_stop)
+# ---------------------------------------------------------------------------
+
+def test_pim_range_start_stop(tmp_path):
+    """pim_start=485, pim_stop=490 must produce correct pim-start/stop args."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.pim_mode = "custom"
+    job.pim_value = 485
+    job.pim_start = 485
+    job.pim_stop = 490
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    assert "--veracrypt-pim-start" in args
+    assert "--veracrypt-pim-stop" in args
+    start_idx = args.index("--veracrypt-pim-start")
+    stop_idx = args.index("--veracrypt-pim-stop")
+    assert args[start_idx + 1] == "485"
+    assert args[stop_idx + 1] == "490"
+
+
+def test_pim_exact_unchanged(tmp_path):
+    """pim_value=500 with no pim_start/pim_stop → single-value pim-start and pim-stop."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.pim_mode = "custom"
+    job.pim_value = 500
+    # pim_start and pim_stop remain None (default)
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    assert "--veracrypt-pim-start" in args
+    assert "--veracrypt-pim-stop" in args
+    start_idx = args.index("--veracrypt-pim-start")
+    stop_idx = args.index("--veracrypt-pim-stop")
+    assert args[start_idx + 1] == "500"
+    assert args[stop_idx + 1] == "500"
+
+
+# ---------------------------------------------------------------------------
+# Device ID flags
+# ---------------------------------------------------------------------------
+
+def test_device_id_passed(tmp_path):
+    """build_command_with_devices with device_ids=[1] must include -d 1."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+
+    args = build_command_with_devices(job, _fake_exe(tmp_path), ws, device_ids=[1])
+    assert "-d" in args
+    d_idx = args.index("-d")
+    assert args[d_idx + 1] == "1"
+
+
+def test_no_d_flag_without_device_ids(tmp_path):
+    """build_command_with_devices with device_ids=None must NOT include -d."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+
+    args = build_command_with_devices(job, _fake_exe(tmp_path), ws, device_ids=None)
+    assert "-d" not in args
+
+
+def test_no_D1_flag_by_default(tmp_path):
+    """build_command without use_cpu_opencl must NOT include -D."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+
+    args = build_command(job, _fake_exe(tmp_path), ws)
+    assert "-D" not in args
+
+
+def test_cuda_not_auto_replaced_without_ignore_cuda(tmp_path):
+    """With ignore_cuda=False, mode 29421 must stay as 29421 in the command."""
+    ws = _make_workspace(tmp_path)
+    header = _make_header(ws)
+    job = _make_job(header, ws)
+    job.hashcat_mode = 29421
+
+    args = build_command(job, _fake_exe(tmp_path), ws, ignore_cuda=False)
+    m_idx = args.index("-m")
+    assert args[m_idx + 1] == "29421"

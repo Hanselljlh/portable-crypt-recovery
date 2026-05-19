@@ -79,6 +79,8 @@ class QueuedTask:
     hashcat_mode: int = 0
     pim_value: int | None = None
     pim_mode: str = "default"  # "default" | "custom"
+    pim_start: int | None = None   # PIM range start (inclusive); overrides pim_value when set
+    pim_stop: int | None = None    # PIM range stop (inclusive); overrides pim_value when set
     wordlist_path: str = ""  # abs path or workspace-relative; empty = no wordlist arg
     created_timestamp: str = ""
     updated_timestamp: str = ""
@@ -108,6 +110,8 @@ class QueuedTask:
             "hashcat_mode": self.hashcat_mode,
             "pim_value": self.pim_value,
             "pim_mode": self.pim_mode,
+            "pim_start": self.pim_start,
+            "pim_stop": self.pim_stop,
             "wordlist_path": self.wordlist_path,
             "created_timestamp": self.created_timestamp,
             "updated_timestamp": self.updated_timestamp,
@@ -136,6 +140,8 @@ class QueuedTask:
             hashcat_mode=data.get("hashcat_mode", 0),
             pim_value=data.get("pim_value"),
             pim_mode=data.get("pim_mode", "default"),
+            pim_start=data.get("pim_start"),
+            pim_stop=data.get("pim_stop"),
             wordlist_path=data.get("wordlist_path", ""),
             created_timestamp=data.get("created_timestamp", ""),
             updated_timestamp=data.get("updated_timestamp", ""),
