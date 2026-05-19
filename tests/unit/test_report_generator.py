@@ -121,9 +121,9 @@ def test_report_manifest_has_schema_version(tmp_path):
 
 def test_report_manifest_does_not_expose_original_keyfile_paths(tmp_path):
     """Exported recovery package manifest must not leak original_path for keyfiles."""
+    from portable_crypt_recovery.core.atomic_write import atomic_write_json
     from portable_crypt_recovery.core.ids import new_id as _new_id
     from portable_crypt_recovery.models.keyfile_set import KeyfileEntry, KeyfileSet
-    from portable_crypt_recovery.core.atomic_write import atomic_write_json
 
     ws = _make_workspace(tmp_path)
     header = _make_header(ws.root)
