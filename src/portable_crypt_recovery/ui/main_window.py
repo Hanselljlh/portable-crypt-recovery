@@ -5,15 +5,14 @@ from __future__ import annotations
 from portable_crypt_recovery import __app_name__, __version__
 
 SCREEN_NAMES = (
-    "Dashboard",
+    "Setup",
     "Targets",
-    "Jobs",
     "Passwords",
+    "Jobs",
     "Queue",
-    "Logs",
     "Reports",
-    "Settings",
     "Cleanup",
+    "Settings",
 )
 
 
@@ -28,48 +27,47 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QAction, QDesktopServices
         from PySide6.QtWidgets import (
-            QHBoxLayout,
             QListWidget,
             QListWidgetItem,
             QMainWindow,
+            QSplitter,
             QStackedWidget,
             QWidget,
         )
 
         from portable_crypt_recovery.ui.cleanup_view import CleanupView
-        from portable_crypt_recovery.ui.dashboard_view import DashboardView
         from portable_crypt_recovery.ui.jobs_view import JobsView
-        from portable_crypt_recovery.ui.logs_view import LogsView
         from portable_crypt_recovery.ui.password_builder_view import PasswordBuilderView
         from portable_crypt_recovery.ui.queue_view import QueueView
         from portable_crypt_recovery.ui.reports_view import ReportsView
         from portable_crypt_recovery.ui.settings_view import SettingsView
+        from portable_crypt_recovery.ui.setup_view import SetupView
         from portable_crypt_recovery.ui.targets_view import TargetsView
 
         class _MainWindow(QMainWindow):
             def __init__(self) -> None:
                 super().__init__()
                 self.setWindowTitle(f"{__app_name__} {__version__}")
-                self.resize(1100, 720)
+                self.resize(1150, 740)
 
-                root = QWidget()
-                layout = QHBoxLayout(root)
+                # Resizable nav/content split
+                from PySide6.QtCore import Qt  # noqa: PLC0415
+                self._splitter = QSplitter(Qt.Orientation.Horizontal)
 
                 self.nav = QListWidget()
-                self.nav.setMaximumWidth(220)
+                self.nav.setMinimumWidth(140)
                 self.stack = QStackedWidget()
 
-                # Build views
+                # Build views in SCREEN_NAMES order
                 views = [
-                    DashboardView(),
+                    SetupView(),
                     TargetsView(),
-                    JobsView(),
                     PasswordBuilderView(),
+                    JobsView(),
                     QueueView(),
-                    LogsView(),
                     ReportsView(),
-                    SettingsView(),
                     CleanupView(),
+                    SettingsView(),
                 ]
 
                 for name, view in zip(SCREEN_NAMES, views, strict=False):
@@ -79,8 +77,18 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 self.nav.currentRowChanged.connect(self._on_nav_changed)
                 self.nav.setCurrentRow(0)
 
-                layout.addWidget(self.nav)
-                layout.addWidget(self.stack, 1)
+                self._splitter.addWidget(self.nav)
+                self._splitter.addWidget(self.stack)
+                # Default split: 200 px nav, rest to content
+                self._splitter.setSizes([200, 950])
+                self._splitter.setStretchFactor(0, 0)
+                self._splitter.setStretchFactor(1, 1)
+
+                root = QWidget()
+                from PySide6.QtWidgets import QHBoxLayout  # noqa: PLC0415
+                layout = QHBoxLayout(root)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(self._splitter)
                 self.setCentralWidget(root)
 
                 # Help menu
@@ -102,7 +110,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
 
                 from portable_crypt_recovery.app.app_state import get_app_state
                 if not get_app_state().is_workspace_open():
-                    self.nav.setCurrentRow(SCREEN_NAMES.index("Settings"))
+                    self.nav.setCurrentRow(list(SCREEN_NAMES).index("Settings"))
                     QMessageBox.information(
                         self,
                         "Welcome — Setup Required",
@@ -112,7 +120,9 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                         "     the workspaces\\default\\ folder in this app directory.\n\n"
                         "  2. Under Hashcat Setup → browse to hashcat.exe and\n"
                         "     click Verify (or use 'Use Portable Tools Folder'\n"
-                        "     if hashcat is already in tools\\hashcat\\).",
+                        "     if hashcat is already in tools\\hashcat\\).\n\n"
+                        "The Setup screen (first item in the left panel) shows\n"
+                        "status at a glance once everything is configured.",
                     )
 
             def _build_help_menu(self) -> None:

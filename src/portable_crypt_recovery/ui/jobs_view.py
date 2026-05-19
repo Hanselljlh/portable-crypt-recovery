@@ -609,7 +609,14 @@ class JobsView:  # pragma: no cover
                             pw_detail = f"wordlist: {Path(wl).name}" if wl else "wordlist: (none)"
                         elif pw_type == "workspace_wordlist":
                             wl = d.get("password_wordlist_path", "")
-                            pw_detail = f"pw-builder: {Path(wl).name}" if wl else "pw-builder: (none)"
+                            if wl:
+                                from portable_crypt_recovery.services.builders.password_builder import (  # noqa: PLC0415
+                                    load_wordlist_nickname,
+                                )
+                                _nick = load_wordlist_nickname(Path(wl))
+                                pw_detail = f"pw-builder: {_nick or Path(wl).name}"
+                            else:
+                                pw_detail = "pw-builder: (none)"
                         else:
                             raw = d.get("password_manual_text", "")
                             n = len([ln for ln in raw.splitlines() if ln.strip()])
@@ -711,9 +718,13 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self.btn_modes_none = QPushButton("Uncheck All")
                 self.btn_modes_vc = QPushButton("VeraCrypt Only")
                 self.btn_modes_tc = QPushButton("TrueCrypt Only")
+                self.btn_cascade_1 = QPushButton("Single Cipher")
+                self.btn_cascade_2 = QPushButton("Cascade ×2")
+                self.btn_cascade_3 = QPushButton("Cascade ×3")
                 self._mode_btns = [
                     self.btn_modes_all, self.btn_modes_none,
                     self.btn_modes_vc, self.btn_modes_tc,
+                    self.btn_cascade_1, self.btn_cascade_2, self.btn_cascade_3,
                 ]
                 for _b in self._mode_btns:
                     mode_btn_row.addWidget(_b)
@@ -812,6 +823,9 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self.btn_modes_none.clicked.connect(lambda: self._set_all_mode_checks(False))
                 self.btn_modes_vc.clicked.connect(lambda: self._set_family_mode_checks("veracrypt"))
                 self.btn_modes_tc.clicked.connect(lambda: self._set_family_mode_checks("truecrypt"))
+                self.btn_cascade_1.clicked.connect(lambda: self._set_cascade_mode_checks(1))
+                self.btn_cascade_2.clicked.connect(lambda: self._set_cascade_mode_checks(2))
+                self.btn_cascade_3.clicked.connect(lambda: self._set_cascade_mode_checks(3))
                 self.cmb_target.currentIndexChanged.connect(self._on_target_changed)
 
                 self._load_targets()
@@ -935,6 +949,17 @@ class _NewJobDraftDialog:  # pragma: no cover
                         Qt.CheckState.Checked if is_match else Qt.CheckState.Unchecked
                     )
 
+            def _set_cascade_mode_checks(self, cascade: int) -> None:
+                """Check only modes matching the given cipher cascade level (1/2/3)."""
+                from PySide6.QtCore import Qt
+                for i in range(self.mode_checklist.count()):
+                    item = self.mode_checklist.item(i)
+                    entry = item.data(256)
+                    is_match = entry is not None and entry.cipher_cascade == cascade
+                    item.setCheckState(
+                        Qt.CheckState.Checked if is_match else Qt.CheckState.Unchecked
+                    )
+
             def _prefill(self, draft: dict) -> None:
                 """Pre-fill dialog fields from an existing draft dict (for Edit mode)."""
                 from PySide6.QtCore import Qt
@@ -1028,6 +1053,10 @@ class _NewJobDraftDialog:  # pragma: no cover
             def _refresh_workspace_wordlists(self) -> None:
                 """Populate the workspace wordlist combo from generated/wordlists/*.txt."""
                 from pathlib import Path
+
+                from portable_crypt_recovery.services.builders.password_builder import (
+                    load_wordlist_meta,
+                )
                 prev = self.cmb_ws_wordlist.currentData()
                 self.cmb_ws_wordlist.clear()
                 if not self._workspace_root:
@@ -1037,12 +1066,16 @@ class _NewJobDraftDialog:  # pragma: no cover
                     return
                 restore_idx = 0
                 for idx, f in enumerate(sorted(wl_dir.glob("*.txt"))):
-                    try:
-                        size = f.stat().st_size
-                        size_str = f"{size // 1024:,} KB" if size >= 1024 else f"{size} B"
-                        label = f"{f.name}  ({size_str})"
-                    except Exception:
-                        label = f.name
+                    meta = load_wordlist_meta(f)
+                    nickname = meta.get("nickname", "")
+                    count = meta.get("candidate_count")
+                    if count is None:
+                        try:
+                            count = sum(1 for _ in f.open("r", encoding="utf-8", errors="replace"))
+                        except OSError:
+                            count = 0
+                    count_str = f"{count:,} passwords"
+                    label = f"{nickname}  ({count_str})" if nickname else f"{f.name}  ({count_str})"
                     self.cmb_ws_wordlist.addItem(label, userData=f)
                     if prev is not None and Path(prev) == f:
                         restore_idx = idx

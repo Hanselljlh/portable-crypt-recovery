@@ -16,6 +16,9 @@ class HashModeEntry:
     is_system: bool = False
     is_legacy: bool = False
     candidate_type: str = "normal_volume_header"
+    # Cipher cascade level: 1 = single cipher (XTS 512), 2 = cascade ×2 (XTS 1024),
+    # 3 = cascade ×3 (XTS 1536).  0 = unknown / not set.
+    cipher_cascade: int = 0
 
 
 @dataclass
@@ -42,6 +45,7 @@ class HashModeSet:
                     "is_system": e.is_system,
                     "is_legacy": e.is_legacy,
                     "candidate_type": e.candidate_type,
+                    "cipher_cascade": e.cipher_cascade,
                 }
                 for e in self.entries
             ],
@@ -58,6 +62,7 @@ class HashModeSet:
                 is_system=e.get("is_system", False),
                 is_legacy=e.get("is_legacy", False),
                 candidate_type=e.get("candidate_type", "normal_volume_header"),
+                cipher_cascade=e.get("cipher_cascade", 0),
             )
             for e in data.get("entries", [])
         ]

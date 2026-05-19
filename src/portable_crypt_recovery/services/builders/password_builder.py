@@ -15,6 +15,13 @@ _WARN_ABOVE = 100_000
 _REQUIRE_CONFIRM_ABOVE = 1_000_000
 _BLOCK_ABOVE = 10_000_000
 
+# Common leet-speak substitutions (lowercase key → substituted character).
+# Only ONE substitution per character to keep combo count manageable.
+_LEET: dict[str, str] = {
+    "a": "@", "e": "3", "i": "1", "o": "0",
+    "s": "$", "t": "7", "l": "1", "g": "9",
+}
+
 
 class PasswordLimitWarning(UserWarning):
     pass
@@ -120,6 +127,152 @@ def count_candidates(segments: list[list[str]]) -> int:
     return total
 
 
+def leet_variants(word: str) -> list[str]:
+    """Generate all leet-speak combinations for *word*.
+
+    Each character that has a known leet substitution (see ``_LEET``) is
+    either kept as-is or replaced by its leet equivalent.  The result is the
+    Cartesian product of all keep/replace decisions, deduped.
+
+    Example::
+
+        leet_variants("sale") → ["sale", "s@le", "sal3", "s@l3", ...]
+    """
+    leet_positions: list[tuple[int, str, str]] = [
+        (i, c, _LEET[c.lower()])
+        for i, c in enumerate(word)
+        if c.lower() in _LEET
+    ]
+    if not leet_positions:
+        return [word]
+    chars = list(word)
+    results: list[str] = []
+    for combo in itertools.product(*[[False, True] for _ in leet_positions]):
+        variant = chars[:]
+        for use_leet, (i, orig, sub) in zip(combo, leet_positions, strict=True):
+            variant[i] = sub if use_leet else orig
+        results.append("".join(variant))
+    return dedupe_preserve_order(results)
+
+
+def number_suffix_variants(
+    word: str,
+    start: int,
+    stop: int,
+    zero_pad: int = 0,
+    prefix: bool = False,
+) -> list[str]:
+    """Append (or prepend) every integer from *start* to *stop* inclusive.
+
+    Parameters
+    ----------
+    zero_pad:
+        If > 0, left-pad numbers to this width with zeros.  E.g. ``zero_pad=2``
+        produces ``"01"`` for 1.
+    prefix:
+        If True, prepend the number instead of appending it.
+    """
+    results: list[str] = []
+    for n in range(start, stop + 1):
+        suffix = str(n).zfill(zero_pad) if zero_pad > 0 else str(n)
+        results.append(suffix + word if prefix else word + suffix)
+    return dedupe_preserve_order(results)
+
+
+def year_suffix_variants(
+    word: str,
+    start: int = 1990,
+    stop: int = 2025,
+    prefix: bool = False,
+) -> list[str]:
+    """Append (or prepend) every year from *start* to *stop* inclusive."""
+    results: list[str] = []
+    for y in range(start, stop + 1):
+        year_str = str(y)
+        results.append(year_str + word if prefix else word + year_str)
+    return dedupe_preserve_order(results)
+
+
+def special_char_variants(
+    word: str,
+    chars: list[str],
+    position: str = "append",
+) -> list[str]:
+    """Append and/or prepend each string in *chars* to *word*.
+
+    Parameters
+    ----------
+    chars:
+        Sequences to attach (e.g. ``["!", "@", "!@#"]``).
+    position:
+        ``"append"`` | ``"prepend"`` | ``"both"``
+    """
+    results: list[str] = []
+    for ch in chars:
+        if position in ("append", "both"):
+            results.append(word + ch)
+        if position in ("prepend", "both"):
+            results.append(ch + word)
+    return dedupe_preserve_order(results)
+
+
+def reverse_variant(word: str) -> list[str]:
+    """Return the word and its reverse (deduped if palindrome)."""
+    return dedupe_preserve_order([word, word[::-1]])
+
+
+# ---------------------------------------------------------------------------
+# Wordlist nickname / metadata helpers
+# ---------------------------------------------------------------------------
+
+def save_wordlist_meta(txt_path: Path, nickname: str, candidate_count: int) -> None:
+    """Write a JSON sidecar file ``<name>.meta.json`` alongside *txt_path*."""
+    import json
+    from datetime import UTC, datetime
+
+    meta = {
+        "nickname": nickname.strip(),
+        "candidate_count": candidate_count,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    meta_path = txt_path.with_suffix(".meta.json")
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+
+def load_wordlist_meta(txt_path: Path) -> dict:
+    """Return the parsed sidecar dict, or ``{}`` if not present / unreadable."""
+    import json
+
+    meta_path = txt_path.with_suffix(".meta.json")
+    if not meta_path.exists():
+        return {}
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def load_wordlist_nickname(txt_path: Path) -> str:
+    """Return the stored nickname for *txt_path*, or ``""`` if none."""
+    return load_wordlist_meta(txt_path).get("nickname", "")
+
+
+def rename_wordlist_nickname(txt_path: Path, new_name: str) -> None:
+    """Update (or create) the sidecar with a new nickname."""
+    import json
+
+    meta = load_wordlist_meta(txt_path)
+    meta["nickname"] = new_name.strip()
+    if "candidate_count" not in meta:
+        try:
+            with txt_path.open(encoding="utf-8", errors="replace") as _fh:
+                meta["candidate_count"] = sum(1 for _ in _fh)
+        except OSError:
+            meta["candidate_count"] = 0
+    meta_path = txt_path.with_suffix(".meta.json")
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+
 def build_manual_password_source(
     passwords: list[str],
     workspace_root: Path,
@@ -192,6 +345,7 @@ def build_generated_password_source(
     segments: list[list[str]],
     workspace_root: Path,
     force: bool = False,
+    nickname: str = "",
 ) -> PasswordSource:
     """Generate passwords from segment combinations and write to workspace.
 
@@ -204,6 +358,9 @@ def build_generated_password_source(
         Workspace root.
     force:
         Bypass limit checks.
+    nickname:
+        Human-readable name saved in a ``.meta.json`` sidecar alongside the
+        wordlist.  Shown in the job picker instead of the raw filename.
     """
     upper_bound = count_candidates(segments)
     _check_limits(upper_bound, force)
@@ -216,6 +373,9 @@ def build_generated_password_source(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(candidates) + "\n", encoding="utf-8")
     rel = to_workspace_relative(out_path, workspace_root)
+
+    if nickname.strip():
+        save_wordlist_meta(out_path, nickname.strip(), len(candidates))
 
     return PasswordSource(
         source_id=source_id,

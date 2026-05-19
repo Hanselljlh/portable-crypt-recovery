@@ -24,10 +24,17 @@ def run_app(argv: list[str]) -> int:
         print("PySide6 is required to run the GUI. Install with: python -m pip install -e .")
         raise SystemExit(2) from exc
 
+    from portable_crypt_recovery.ui.disclaimer_dialog import DisclaimerDialog
     from portable_crypt_recovery.ui.main_window import MainWindow
 
     app = QApplication(argv)
     app.setApplicationName(__app_name__)
+
+    # Show disclaimer on every launch — must be accepted to continue
+    dlg = DisclaimerDialog()
+    if dlg.exec() != dlg.Accepted:
+        return 0
+
     window = MainWindow()
     window.show()
 
