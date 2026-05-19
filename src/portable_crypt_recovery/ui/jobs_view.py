@@ -320,7 +320,7 @@ class JobsView:  # pragma: no cover
 
                 # Password source (shared across all headers)
                 pw_type = draft.get("password_source_type", "manual")
-                if pw_type == "wordlist":
+                if pw_type in ("wordlist", "workspace_wordlist"):
                     wl_path = Path(draft.get("password_wordlist_path", ""))
                     password_source = build_wordlist_source(wl_path, ws)
                 else:
@@ -594,6 +594,9 @@ class JobsView:  # pragma: no cover
                         if pw_type == "wordlist":
                             wl = d.get("password_wordlist_path", "")
                             pw_detail = f"wordlist: {Path(wl).name}" if wl else "wordlist: (none)"
+                        elif pw_type == "workspace_wordlist":
+                            wl = d.get("password_wordlist_path", "")
+                            pw_detail = f"pw-builder: {Path(wl).name}" if wl else "pw-builder: (none)"
                         else:
                             raw = d.get("password_manual_text", "")
                             n = len([ln for ln in raw.splitlines() if ln.strip()])
@@ -633,7 +636,9 @@ class _NewJobDraftDialog:  # pragma: no cover
             QPlainTextEdit,
             QPushButton,
             QRadioButton,
+            QScrollArea,
             QVBoxLayout,
+            QWidget,
         )
 
         class _Dlg(QDialog):
@@ -643,9 +648,15 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self.draft = None
                 is_edit = draft_data is not None
                 self.setWindowTitle("Edit Job Draft" if is_edit else "New Job Draft")
-                self.resize(680, 720)
+                self.resize(720, 860)
 
-                layout = QVBoxLayout(self)
+                outer = QVBoxLayout(self)
+                scroll = QScrollArea()
+                scroll.setWidgetResizable(True)
+                _container = QWidget()
+                layout = QVBoxLayout(_container)
+                scroll.setWidget(_container)
+                outer.addWidget(scroll, 1)
 
                 # Target + Header selection
                 tgt_group = QGroupBox("Target & Headers")
@@ -679,7 +690,7 @@ class _NewJobDraftDialog:  # pragma: no cover
                 mode_layout.addWidget(self.rad_specific)
                 # Checklist for specific-mode selection (hidden until rad_specific is chosen)
                 self.mode_checklist = QListWidget()
-                self.mode_checklist.setMaximumHeight(150)
+                self.mode_checklist.setMinimumHeight(360)
                 self.mode_checklist.setVisible(False)
                 mode_layout.addWidget(self.mode_checklist)
                 mode_btn_row = QHBoxLayout()
@@ -738,6 +749,17 @@ class _NewJobDraftDialog:  # pragma: no cover
                 wl_row.addWidget(self.txt_wordlist)
                 wl_row.addWidget(btn_browse_wl)
                 pw_layout.addLayout(wl_row)
+                self.rad_pw_workspace = QRadioButton("Workspace wordlist (Password Builder):")
+                pw_layout.addWidget(self.rad_pw_workspace)
+                ws_row = QHBoxLayout()
+                self.cmb_ws_wordlist = QComboBox()
+                self.cmb_ws_wordlist.setEnabled(False)
+                self.cmb_ws_wordlist.setMinimumWidth(260)
+                self._btn_refresh_ws = QPushButton("Refresh")
+                self._btn_refresh_ws.clicked.connect(self._refresh_workspace_wordlists)
+                ws_row.addWidget(self.cmb_ws_wordlist, 1)
+                ws_row.addWidget(self._btn_refresh_ws)
+                pw_layout.addLayout(ws_row)
                 layout.addWidget(pw_group)
 
                 # Keyfiles (optional)
@@ -757,19 +779,21 @@ class _NewJobDraftDialog:  # pragma: no cover
                 kf_layout.addLayout(kf_btn_row)
                 layout.addWidget(kf_group)
 
-                # Buttons
+                # Buttons (outside scroll area so they're always visible)
                 buttons = QDialogButtonBox(
                     QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
                 )
                 buttons.accepted.connect(self._on_accept)
                 buttons.rejected.connect(self.reject)
-                layout.addWidget(buttons)
+                outer.addWidget(buttons)
 
                 # Wire signals
                 self.rad_pim_custom.toggled.connect(
                     lambda checked: self.txt_pim.setEnabled(checked)
                 )
-                self.rad_pw_wordlist.toggled.connect(self._on_pw_type_changed)
+                self.rad_pw_manual.toggled.connect(lambda _: self._on_pw_type_changed())
+                self.rad_pw_wordlist.toggled.connect(lambda _: self._on_pw_type_changed())
+                self.rad_pw_workspace.toggled.connect(lambda _: self._on_pw_type_changed())
                 self.rad_specific.toggled.connect(self._on_mode_strategy_changed)
                 self.btn_modes_all.clicked.connect(lambda: self._set_all_mode_checks(True))
                 self.btn_modes_none.clicked.connect(lambda: self._set_all_mode_checks(False))
@@ -947,9 +971,19 @@ class _NewJobDraftDialog:  # pragma: no cover
                     self.rad_pim_default.setChecked(True)
 
                 # --- Password source ---
-                if draft.get("password_source_type") == "wordlist":
+                _pw_src = draft.get("password_source_type", "manual")
+                if _pw_src == "wordlist":
                     self.rad_pw_wordlist.setChecked(True)
                     self.txt_wordlist.setText(draft.get("password_wordlist_path", ""))
+                elif _pw_src == "workspace_wordlist":
+                    self.rad_pw_workspace.setChecked(True)
+                    self._refresh_workspace_wordlists()
+                    _saved_wl = draft.get("password_wordlist_path", "")
+                    for _i in range(self.cmb_ws_wordlist.count()):
+                        _d = self.cmb_ws_wordlist.itemData(_i)
+                        if _d is not None and str(_d) == _saved_wl:
+                            self.cmb_ws_wordlist.setCurrentIndex(_i)
+                            break
                 else:
                     self.rad_pw_manual.setChecked(True)
                     self.txt_passwords.setPlainText(draft.get("password_manual_text", ""))
@@ -961,9 +995,15 @@ class _NewJobDraftDialog:  # pragma: no cover
                     item.setData(256, path)
                     self.kf_list.addItem(item)
 
-            def _on_pw_type_changed(self, checked: bool) -> None:
-                self.txt_passwords.setEnabled(not checked)
-                self.txt_wordlist.setEnabled(checked)
+            def _on_pw_type_changed(self) -> None:
+                is_manual = self.rad_pw_manual.isChecked()
+                is_wordlist = self.rad_pw_wordlist.isChecked()
+                is_workspace = self.rad_pw_workspace.isChecked()
+                self.txt_passwords.setEnabled(is_manual)
+                self.txt_wordlist.setEnabled(is_wordlist)
+                self.cmb_ws_wordlist.setEnabled(is_workspace)
+                if is_workspace and self.cmb_ws_wordlist.count() == 0:
+                    self._refresh_workspace_wordlists()
 
             def _browse_wordlist(self) -> None:
                 path, _ = QFileDialog.getOpenFileName(
@@ -971,6 +1011,30 @@ class _NewJobDraftDialog:  # pragma: no cover
                 )
                 if path:
                     self.txt_wordlist.setText(path)
+
+            def _refresh_workspace_wordlists(self) -> None:
+                """Populate the workspace wordlist combo from generated/wordlists/*.txt."""
+                from pathlib import Path
+                prev = self.cmb_ws_wordlist.currentData()
+                self.cmb_ws_wordlist.clear()
+                if not self._workspace_root:
+                    return
+                wl_dir = self._workspace_root / "generated" / "wordlists"
+                if not wl_dir.exists():
+                    return
+                restore_idx = 0
+                for idx, f in enumerate(sorted(wl_dir.glob("*.txt"))):
+                    try:
+                        size = f.stat().st_size
+                        size_str = f"{size // 1024:,} KB" if size >= 1024 else f"{size} B"
+                        label = f"{f.name}  ({size_str})"
+                    except Exception:
+                        label = f.name
+                    self.cmb_ws_wordlist.addItem(label, userData=f)
+                    if prev is not None and Path(prev) == f:
+                        restore_idx = idx
+                if self.cmb_ws_wordlist.count() > 0:
+                    self.cmb_ws_wordlist.setCurrentIndex(restore_idx)
 
             def _add_keyfile(self) -> None:
                 from PySide6.QtWidgets import QListWidgetItem
@@ -1016,12 +1080,26 @@ class _NewJobDraftDialog:  # pragma: no cover
                     QMessageBox.warning(self, "Missing Header", "No headers available for this target.")
                     return
 
-                pw_type = "wordlist" if self.rad_pw_wordlist.isChecked() else "manual"
-                if pw_type == "wordlist":
-                    if not self.txt_wordlist.text().strip():
+                if self.rad_pw_wordlist.isChecked():
+                    pw_type = "wordlist"
+                    wl_path = self.txt_wordlist.text().strip()
+                    if not wl_path:
                         QMessageBox.warning(self, "No Wordlist", "Please select a wordlist file.")
                         return
+                elif self.rad_pw_workspace.isChecked():
+                    pw_type = "workspace_wordlist"
+                    _ws_data = self.cmb_ws_wordlist.currentData()
+                    wl_path = str(_ws_data) if _ws_data else ""
+                    if not wl_path:
+                        QMessageBox.warning(
+                            self, "No Wordlist",
+                            "No workspace wordlist selected.\n"
+                            "Generate one in the Passwords panel first, then click Refresh."
+                        )
+                        return
                 else:
+                    pw_type = "manual"
+                    wl_path = ""
                     if not self.txt_passwords.toPlainText().strip():
                         QMessageBox.warning(self, "No Passwords", "Please enter at least one password.")
                         return
@@ -1147,7 +1225,7 @@ class _NewJobDraftDialog:  # pragma: no cover
                     "pim_raw_input": self.txt_pim.text().strip(),
                     "password_source_type": pw_type,
                     "password_manual_text": self.txt_passwords.toPlainText(),
-                    "password_wordlist_path": self.txt_wordlist.text().strip(),
+                    "password_wordlist_path": wl_path if pw_type in ("wordlist", "workspace_wordlist") else self.txt_wordlist.text().strip(),
                     "keyfile_paths": keyfile_paths,
                     "estimated_job_count": estimated_job_count,
                     "created_timestamp": utc_now_iso(),

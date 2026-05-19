@@ -8,6 +8,7 @@ SCREEN_NAMES = (
     "Dashboard",
     "Targets",
     "Jobs",
+    "Passwords",
     "Queue",
     "Logs",
     "Reports",
@@ -39,6 +40,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
         from portable_crypt_recovery.ui.dashboard_view import DashboardView
         from portable_crypt_recovery.ui.jobs_view import JobsView
         from portable_crypt_recovery.ui.logs_view import LogsView
+        from portable_crypt_recovery.ui.password_builder_view import PasswordBuilderView
         from portable_crypt_recovery.ui.queue_view import QueueView
         from portable_crypt_recovery.ui.reports_view import ReportsView
         from portable_crypt_recovery.ui.settings_view import SettingsView
@@ -62,6 +64,7 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                     DashboardView(),
                     TargetsView(),
                     JobsView(),
+                    PasswordBuilderView(),
                     QueueView(),
                     LogsView(),
                     ReportsView(),
