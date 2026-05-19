@@ -8,9 +8,11 @@ from typing import Any
 
 @dataclass
 class Report:
-    """Metadata for a cracked-job report."""
+    """Metadata for a cracked-task report."""
 
     report_id: str
+    # Stored as "job_id" in persisted JSON/CSV for backward compatibility with
+    # existing saved report indexes.  The value is always a task_id at runtime.
     job_id: str
     cracked_password: str | None = None  # None if not cracked
     recovered_header_path: str = ""  # workspace-relative path to normalized header

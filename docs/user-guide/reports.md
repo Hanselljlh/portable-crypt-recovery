@@ -10,13 +10,13 @@ keyfiles, and supporting metadata.
 2. Click **Refresh** to load the latest report list.
 3. Select a report to see its details in the lower pane.
 
-The list shows the timestamp, job ID prefix, and whether a password was recovered.
+The list shows the timestamp, task ID prefix, and whether a password was recovered.
 
 ## Report package contents
 
 Each report is stored in:
 ```
-reports/cracked/job_<job_id>_run_<run_id>/
+reports/cracked/task_<task_id>_run_<run_id>/
 ```
 
 | File | Contents |
@@ -26,10 +26,10 @@ reports/cracked/job_<job_id>_run_<run_id>/
 | `recovered-result.md` | Markdown summary (no password — use .txt/.json) |
 | `normalized-header.bin` | The 512-byte header that was cracked |
 | `keyfile_*.*` | Copies of any keyfiles used (if applicable) |
-| `recovery-package-manifest.json` | Metadata (job ID, mode, PIM, etc.) |
+| `recovery-package-manifest.json` | Metadata (task ID, mode, PIM, etc.) |
 | `stats.txt` | Raw Hashcat status output |
 | `command-used.txt` | The Hashcat command that produced this result |
-| `how-to-open.txt` | Instructions for mounting the volume |
+| `how-to-open-this-volume.txt` | Instructions for mounting the volume |
 
 > **Security:** `recovered-result.txt` and `recovered-result.json` contain
 > the plaintext password. Keep this folder secure. Delete it when no longer needed.

@@ -86,7 +86,7 @@ class ReportsView:  # pragma: no cover
                     cracked_label = "CRACKED" if cracked else "no password"
                     label = (
                         f"{r.get('created_timestamp', '?')[:19]}  |  "
-                        f"Job {r.get('job_id', '?')[:8]}  |  {cracked_label}"
+                        f"Task {r.get('job_id', '?')[:8]}  |  {cracked_label}"
                     )
                     self.report_list.addItem(label)
 
@@ -100,7 +100,7 @@ class ReportsView:  # pragma: no cover
                 r = self._reports[row]
                 lines = [
                     f"Report ID:  {r.get('report_id', '?')}",
-                    f"Job ID:     {r.get('job_id', '?')}",
+                    f"Task ID:    {r.get('job_id', '?')}",
                     f"Created:    {r.get('created_timestamp', '?')}",
                     f"Folder:     {r.get('report_folder', '?')}",
                     "",

@@ -12,6 +12,7 @@ from portable_crypt_recovery.models.report import Report
 
 _CSV_PATH = "reports/csv/cracked-results-index.csv"
 _JSON_PATH = "reports/json/report-index.json"
+# "job_id" column name kept for CSV backward compatibility — value is a task_id.
 _CSV_HEADERS = ["report_id", "job_id", "cracked_timestamp", "report_folder"]
 
 
