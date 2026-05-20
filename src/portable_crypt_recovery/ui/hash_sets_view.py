@@ -83,21 +83,54 @@ class HashSetsView:  # pragma: no cover
                 _al.addLayout(_algo_row2)
                 filter_row.addWidget(grp_algo, 1)
 
-                # Cascade
-                grp_cascade = QGroupBox("Cipher Cascade")
-                _cl = QVBoxLayout(grp_cascade)
-                _cl.setSpacing(2)
-                _cl.setContentsMargins(6, 4, 6, 4)
-                self.chk_c1 = QCheckBox("Single  (×1 / XTS 512)")
-                self.chk_c1.setChecked(True)
-                self.chk_c2 = QCheckBox("Double  (×2 / XTS 1024)")
-                self.chk_c2.setChecked(True)
-                self.chk_c3 = QCheckBox("Triple  (×3 / XTS 1536)")
-                self.chk_c3.setChecked(True)
-                _cl.addWidget(self.chk_c1)
-                _cl.addWidget(self.chk_c2)
-                _cl.addWidget(self.chk_c3)
-                filter_row.addWidget(grp_cascade)
+                # Encryption type (cipher names)
+                grp_cipher = QGroupBox("Encryption Type")
+                _cil = QVBoxLayout(grp_cipher)
+                _cil.setSpacing(3)
+                _cil.setContentsMargins(6, 4, 6, 4)
+
+                _note = QLabel("Ciphers in the same group share one Hashcat mode.")
+                _note.setStyleSheet("font-size: 10px; color: #888;")
+                _cil.addWidget(_note)
+
+                _r1 = QHBoxLayout()
+                _r1.setSpacing(6)
+                _r1.addWidget(QLabel("Single:"))
+                self.chk_aes = QCheckBox("AES")
+                self.chk_aes.setChecked(True)
+                self.chk_serpent = QCheckBox("Serpent")
+                self.chk_serpent.setChecked(True)
+                self.chk_twofish = QCheckBox("Twofish")
+                self.chk_twofish.setChecked(True)
+                for _w in [self.chk_aes, self.chk_serpent, self.chk_twofish]:
+                    _r1.addWidget(_w)
+                _r1.addStretch()
+                _cil.addLayout(_r1)
+
+                _r2 = QHBoxLayout()
+                _r2.setSpacing(6)
+                _r2.addWidget(QLabel("Two-cipher:"))
+                self.chk_at = QCheckBox("AES-Twofish")
+                self.chk_at.setChecked(True)
+                self.chk_sa = QCheckBox("Serpent-AES")
+                self.chk_sa.setChecked(True)
+                self.chk_ts = QCheckBox("Twofish-Serpent")
+                self.chk_ts.setChecked(True)
+                for _w in [self.chk_at, self.chk_sa, self.chk_ts]:
+                    _r2.addWidget(_w)
+                _r2.addStretch()
+                _cil.addLayout(_r2)
+
+                _r3 = QHBoxLayout()
+                _r3.setSpacing(6)
+                _r3.addWidget(QLabel("Three-cipher:"))
+                self.chk_ats = QCheckBox("AES-Twofish-Serpent")
+                self.chk_ats.setChecked(True)
+                _r3.addWidget(self.chk_ats)
+                _r3.addStretch()
+                _cil.addLayout(_r3)
+
+                filter_row.addWidget(grp_cipher, 1)
 
                 # Volume type
                 grp_volume = QGroupBox("Volume Type")
@@ -189,7 +222,8 @@ class HashSetsView:  # pragma: no cover
                     self.chk_vc, self.chk_tc,
                     self.chk_sha512, self.chk_ripemd, self.chk_sha256,
                     self.chk_whirlpool, self.chk_streebog,
-                    self.chk_c1, self.chk_c2, self.chk_c3,
+                    self.chk_aes, self.chk_serpent, self.chk_twofish,
+                    self.chk_at, self.chk_sa, self.chk_ts, self.chk_ats,
                     self.chk_standard, self.chk_boot,
                     self.chk_current, self.chk_legacy,
                 ]:
@@ -265,9 +299,19 @@ class HashSetsView:  # pragma: no cover
                 if chk is not None and not chk.isChecked():
                     return False
 
-                c_map = {1: self.chk_c1, 2: self.chk_c2, 3: self.chk_c3}
-                cc_chk = c_map.get(entry.cipher_cascade)
-                if cc_chk is not None and not cc_chk.isChecked():
+                want_c1 = (
+                    self.chk_aes.isChecked()
+                    or self.chk_serpent.isChecked()
+                    or self.chk_twofish.isChecked()
+                )
+                want_c2 = (
+                    self.chk_at.isChecked()
+                    or self.chk_sa.isChecked()
+                    or self.chk_ts.isChecked()
+                )
+                want_c3 = self.chk_ats.isChecked()
+                c_want = {1: want_c1, 2: want_c2, 3: want_c3}
+                if not c_want.get(entry.cipher_cascade, True):
                     return False
 
                 if entry.is_system and not self.chk_boot.isChecked():
