@@ -207,16 +207,12 @@ class TargetsView:  # pragma: no cover
                 if result.known_kdfs or result.known_xts_sizes:
                     try:
                         from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                            KDF_DISPLAY_NAMES,
                             hash_set_from_hints,
                         )
-                        _kdf_display = {
-                            "sha512": "SHA-512", "ripemd160": "RIPEMD-160",
-                            "sha256": "SHA-256", "whirlpool": "Whirlpool",
-                            "streebog512": "Streebog-512",
-                        }
                         _xts_display = {512: "×1", 1024: "×2", 1536: "×3"}
                         _parts = (
-                            [_kdf_display.get(k, k) for k in result.known_kdfs]
+                            [KDF_DISPLAY_NAMES.get(k, k) for k in result.known_kdfs]
                             + [_xts_display.get(s, str(s)) for s in result.known_xts_sizes]
                         )
                         _nickname = f"{source_path.name} — {', '.join(_parts)}"

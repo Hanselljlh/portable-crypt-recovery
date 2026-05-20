@@ -166,7 +166,15 @@ class PimSetsView:  # pragma: no cover
                     )
                     detail = f"{len(values)} value{'s' if len(values) != 1 else ''}"
 
-                save_named_pim_set(app_state.workspace_root, ps)
+                try:
+                    save_named_pim_set(app_state.workspace_root, ps)
+                except Exception as exc:
+                    QMessageBox.critical(
+                        self, "Save Error",
+                        f"Could not save PIM set:\n{exc}\n\n"
+                        "Check workspace folder permissions.",
+                    )
+                    return
                 self.txt_set_name.clear()
                 self._refresh_saved_list()
                 QMessageBox.information(self, "Saved", f"PIM set '{name}' saved ({detail}).")
@@ -194,6 +202,10 @@ class PimSetsView:  # pragma: no cover
                     item = QListWidgetItem(f"{ps.nickname}  ({detail}){notes_tag}")
                     item.setData(256, ps)
                     self.saved_list.addItem(item)
+
+            def _refresh_list(self) -> None:
+                """Called by main_window on navigation to keep saved sets current."""
+                self._refresh_saved_list()
 
             def _load_set(self) -> None:
                 from PySide6.QtWidgets import QMessageBox
@@ -239,7 +251,11 @@ class PimSetsView:  # pragma: no cover
                     return
 
                 ps.nickname = new_name.strip()
-                save_named_pim_set(get_app_state().workspace_root, ps)
+                try:
+                    save_named_pim_set(get_app_state().workspace_root, ps)
+                except Exception as exc:
+                    QMessageBox.critical(self, "Rename Error", f"Could not rename PIM set:\n{exc}")
+                    return
                 self._refresh_saved_list()
 
             def _delete_set(self) -> None:

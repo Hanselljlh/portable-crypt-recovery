@@ -200,7 +200,15 @@ class KeyfileSetsView:  # pragma: no cover
                     entries=entries,
                     notes=self.txt_notes.text().strip(),
                 )
-                save_named_keyfile_set(app_state.workspace_root, ks)
+                try:
+                    save_named_keyfile_set(app_state.workspace_root, ks)
+                except Exception as exc:
+                    QMessageBox.critical(
+                        self, "Save Error",
+                        f"Could not save keyfile set:\n{exc}\n\n"
+                        "Check workspace folder permissions.",
+                    )
+                    return
                 self.txt_set_name.clear()
                 self._refresh_saved_list()
                 QMessageBox.information(
@@ -229,6 +237,10 @@ class KeyfileSetsView:  # pragma: no cover
                     )
                     item.setData(256, ks)
                     self.saved_list.addItem(item)
+
+            def _refresh_list(self) -> None:
+                """Called by main_window on navigation to keep saved sets current."""
+                self._refresh_saved_list()
 
             def _load_set(self) -> None:
                 from PySide6.QtWidgets import QListWidgetItem, QMessageBox
@@ -274,7 +286,13 @@ class KeyfileSetsView:  # pragma: no cover
                     return
 
                 ks.nickname = new_name.strip()
-                save_named_keyfile_set(get_app_state().workspace_root, ks)
+                try:
+                    save_named_keyfile_set(get_app_state().workspace_root, ks)
+                except Exception as exc:
+                    QMessageBox.critical(
+                        self, "Rename Error", f"Could not rename keyfile set:\n{exc}"
+                    )
+                    return
                 self._refresh_saved_list()
 
             def _delete_set(self) -> None:

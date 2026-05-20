@@ -497,7 +497,15 @@ class HashSetsView:  # pragma: no cover
                     nickname=name,
                     entries=entries,
                 )
-                save_named_hash_set(app_state.workspace_root, hms)
+                try:
+                    save_named_hash_set(app_state.workspace_root, hms)
+                except Exception as exc:
+                    QMessageBox.critical(
+                        self, "Save Error",
+                        f"Could not save hash set:\n{exc}\n\n"
+                        "Check workspace folder permissions.",
+                    )
+                    return
                 self.txt_set_name.clear()
                 self._refresh_saved_list()
                 QMessageBox.information(
@@ -525,6 +533,10 @@ class HashSetsView:  # pragma: no cover
                     )
                     item.setData(256, hms)
                     self.saved_list.addItem(item)
+
+            def _refresh_list(self) -> None:
+                """Called by main_window on navigation to keep saved sets current."""
+                self._refresh_saved_list()
 
             def _load_set(self) -> None:
                 from PySide6.QtCore import Qt
@@ -577,7 +589,11 @@ class HashSetsView:  # pragma: no cover
                     return
 
                 hms.nickname = new_name.strip()
-                save_named_hash_set(get_app_state().workspace_root, hms)
+                try:
+                    save_named_hash_set(get_app_state().workspace_root, hms)
+                except Exception as exc:
+                    QMessageBox.critical(self, "Rename Error", f"Could not rename hash set:\n{exc}")
+                    return
                 self._refresh_saved_list()
 
             def _delete_set(self) -> None:

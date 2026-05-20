@@ -372,6 +372,16 @@ KDF_LABEL_MAP: dict[str, str] = {
     "streebog512": "Streebog",
 }
 
+# Maps user-facing KDF identifier to its human-readable display name for UI labels.
+# Import this from the UI layer instead of defining a local copy.
+KDF_DISPLAY_NAMES: dict[str, str] = {
+    "sha512": "SHA-512",
+    "ripemd160": "RIPEMD-160",
+    "sha256": "SHA-256",
+    "whirlpool": "Whirlpool",
+    "streebog512": "Streebog-512",
+}
+
 # Maps XTS key-size (int, bits) to the substring that appears in labels.
 XTS_LABEL_MAP: dict[int, str] = {
     512: "XTS 512",
