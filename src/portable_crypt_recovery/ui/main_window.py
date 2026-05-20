@@ -110,19 +110,19 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
 
                 from portable_crypt_recovery.app.app_state import get_app_state
                 if not get_app_state().is_workspace_open():
-                    self.nav.setCurrentRow(list(SCREEN_NAMES).index("Settings"))
+                    # Stay on the Setup screen — it already shows status at a
+                    # glance and has buttons that deep-link to Settings.
                     QMessageBox.information(
                         self,
                         "Welcome — Setup Required",
                         "No workspace is loaded.\n\n"
                         "To get started:\n"
-                        "  1. Under Workspace → click Open Workspace and select\n"
-                        "     the workspaces\\default\\ folder in this app directory.\n\n"
-                        "  2. Under Hashcat Setup → browse to hashcat.exe and\n"
-                        "     click Verify (or use 'Use Portable Tools Folder'\n"
+                        "  1. Click 'Open / Change Workspace…' on this screen\n"
+                        "     and select the workspaces\\default\\ folder.\n\n"
+                        "  2. Click 'Configure Hashcat…' and browse to hashcat.exe,\n"
+                        "     then click Verify (or use 'Use Portable Tools Folder'\n"
                         "     if hashcat is already in tools\\hashcat\\).\n\n"
-                        "The Setup screen (first item in the left panel) shows\n"
-                        "status at a glance once everything is configured.",
+                        "This Setup screen shows status at a glance once configured.",
                     )
 
             def _build_help_menu(self) -> None:
