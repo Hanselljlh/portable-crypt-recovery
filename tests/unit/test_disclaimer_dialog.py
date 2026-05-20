@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import sys
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -38,8 +35,8 @@ def test_accepted_comparison_matches_int_1():
     """exec() returns an int; confirm it compares equal to DialogCode.Accepted."""
     _make_app()
     from PySide6.QtWidgets import QDialog
-    assert 1 == QDialog.DialogCode.Accepted
-    assert 0 != QDialog.DialogCode.Accepted
+    assert QDialog.DialogCode.Accepted == 1
+    assert QDialog.DialogCode.Accepted != 0
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +133,6 @@ def test_application_comparison_does_not_raise():
     dlg.accept()
 
     # This is the exact expression from application.py — must not AttributeError
-    result = dlg.exec  # exec itself — we don't call it here to avoid blocking
     comparison_ok = dlg.result() != QDialog.DialogCode.Accepted
     assert comparison_ok is False  # accepted → result() == Accepted → comparison is False
 

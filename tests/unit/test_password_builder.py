@@ -14,7 +14,16 @@ from portable_crypt_recovery.services.builders.password_builder import (
     count_candidates,
     dedupe_preserve_order,
     expand_pattern_tokens,
+    leet_variants,
+    load_wordlist_meta,
+    load_wordlist_nickname,
+    number_suffix_variants,
     permutation_variants,
+    rename_wordlist_nickname,
+    reverse_variant,
+    save_wordlist_meta,
+    special_char_variants,
+    year_suffix_variants,
 )
 
 
@@ -235,9 +244,6 @@ def test_permutation_variants_order_preserved():
 # leet_variants
 # ---------------------------------------------------------------------------
 
-from portable_crypt_recovery.services.builders.password_builder import leet_variants  # noqa: E402
-
-
 def test_leet_variants_no_leet_chars():
     assert leet_variants("xyz") == ["xyz"]
 
@@ -275,9 +281,6 @@ def test_leet_variants_case_preserved():
 # number_suffix_variants
 # ---------------------------------------------------------------------------
 
-from portable_crypt_recovery.services.builders.password_builder import number_suffix_variants  # noqa: E402
-
-
 def test_number_suffix_basic():
     results = number_suffix_variants("dog", 1, 3)
     assert results == ["dog1", "dog2", "dog3"]
@@ -301,9 +304,6 @@ def test_number_suffix_single():
 # year_suffix_variants
 # ---------------------------------------------------------------------------
 
-from portable_crypt_recovery.services.builders.password_builder import year_suffix_variants  # noqa: E402
-
-
 def test_year_suffix_basic():
     results = year_suffix_variants("dog", 2020, 2022)
     assert results == ["dog2020", "dog2021", "dog2022"]
@@ -321,9 +321,6 @@ def test_year_suffix_single_year():
 # ---------------------------------------------------------------------------
 # special_char_variants
 # ---------------------------------------------------------------------------
-
-from portable_crypt_recovery.services.builders.password_builder import special_char_variants  # noqa: E402
-
 
 def test_special_char_append():
     results = special_char_variants("dog", ["!", "@"])
@@ -351,9 +348,6 @@ def test_special_char_no_duplicates():
 # reverse_variant
 # ---------------------------------------------------------------------------
 
-from portable_crypt_recovery.services.builders.password_builder import reverse_variant  # noqa: E402
-
-
 def test_reverse_variant_basic():
     results = reverse_variant("dog")
     assert "dog" in results
@@ -374,14 +368,6 @@ def test_reverse_variant_single_char():
 # ---------------------------------------------------------------------------
 # Wordlist nickname / metadata helpers
 # ---------------------------------------------------------------------------
-
-from portable_crypt_recovery.services.builders.password_builder import (  # noqa: E402
-    load_wordlist_meta,
-    load_wordlist_nickname,
-    rename_wordlist_nickname,
-    save_wordlist_meta,
-)
-
 
 def test_save_and_load_meta(tmp_path):
     txt = tmp_path / "pwsrc_test.txt"
