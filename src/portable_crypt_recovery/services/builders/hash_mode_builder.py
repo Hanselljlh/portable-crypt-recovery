@@ -8,6 +8,10 @@ TrueCrypt legacy modes: 6211-6243
 
 from __future__ import annotations
 
+import contextlib
+import json
+from pathlib import Path
+
 from portable_crypt_recovery.core.ids import new_id
 from portable_crypt_recovery.models.hash_mode_set import HashModeEntry, HashModeSet
 
@@ -398,3 +402,91 @@ def truecrypt_only_modes() -> frozenset[int]:
 def system_modes() -> frozenset[int]:
     """Return mode numbers that are system/boot modes."""
     return _SYSTEM_MODES
+
+
+def all_mode_entries() -> list[HashModeEntry]:
+    """Return every known mode entry across all families, volume types, and generations.
+
+    Used by the Hash Sets screen to populate the full filterable mode list.
+    Entries are deduplicated by mode number.
+    """
+    tables: list[tuple[list[tuple[int, str]], str, bool, bool, str]] = [
+        (_VC_CURRENT_NONSYSTEM, "veracrypt", False, False, "normal_volume_header"),
+        (_VC_CURRENT_SYSTEM,    "veracrypt", True,  False, "normal_system_header"),
+        (_VC_LEGACY_NONSYSTEM,  "veracrypt", False, True,  "normal_volume_header"),
+        (_VC_LEGACY_SYSTEM,     "veracrypt", True,  True,  "normal_system_header"),
+        (_TC_CURRENT_NONSYSTEM, "truecrypt", False, False, "normal_volume_header"),
+        (_TC_CURRENT_SYSTEM,    "truecrypt", True,  False, "normal_system_header"),
+        (_TC_LEGACY_NONSYSTEM,  "truecrypt", False, True,  "normal_volume_header"),
+        (_TC_LEGACY_SYSTEM,     "truecrypt", True,  True,  "normal_system_header"),
+    ]
+    seen: set[int] = set()
+    result: list[HashModeEntry] = []
+    for mode_pairs, family, is_system, is_legacy, ctype in tables:
+        for entry in _to_entries(mode_pairs, family, is_system, is_legacy, ctype):
+            if entry.mode not in seen:
+                seen.add(entry.mode)
+                result.append(entry)
+    return result
+
+
+def algo_from_label(label: str) -> str:
+    """Extract the hash algorithm display name from a mode label string."""
+    lu = label.upper()
+    if "SHA512" in lu or "SHA-512" in lu:
+        return "SHA-512"
+    if "SHA256" in lu or "SHA-256" in lu:
+        return "SHA-256"
+    if "RIPEMD160" in lu or "RIPEMD-160" in lu:
+        return "RIPEMD-160"
+    if "WHIRLPOOL" in lu:
+        return "Whirlpool"
+    if "STREEBOG" in lu:
+        return "Streebog-512"
+    return "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# Named hash-set persistence
+# ---------------------------------------------------------------------------
+
+def _named_sets_dir(workspace_root: Path) -> Path:
+    d = Path(workspace_root) / "generated" / "hash-mode-sets"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_named_hash_set(workspace_root: Path, hms: HashModeSet) -> None:
+    """Persist a user-created named hash mode set to the workspace."""
+    from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
+    path = _named_sets_dir(workspace_root) / f"{hms.mode_set_id}.json"
+    atomic_write_json(path, hms.to_dict())
+
+
+def list_named_hash_sets(workspace_root: Path) -> list[HashModeSet]:
+    """Return all saved named hash sets, sorted by nickname."""
+    result: list[HashModeSet] = []
+    for p in sorted(_named_sets_dir(workspace_root).glob("*.json")):
+        with contextlib.suppress(Exception):
+            result.append(HashModeSet.from_dict(json.loads(p.read_text(encoding="utf-8"))))
+    return sorted(result, key=lambda s: s.nickname.lower())
+
+
+def delete_named_hash_set(workspace_root: Path, mode_set_id: str) -> bool:
+    """Delete a named hash set by ID.  Returns True if deleted."""
+    path = _named_sets_dir(workspace_root) / f"{mode_set_id}.json"
+    if path.exists():
+        path.unlink()
+        return True
+    return False
+
+
+def load_named_hash_set(workspace_root: Path, mode_set_id: str) -> HashModeSet | None:
+    """Load one named hash set by ID, or None if not found."""
+    path = _named_sets_dir(workspace_root) / f"{mode_set_id}.json"
+    if not path.exists():
+        return None
+    with contextlib.suppress(Exception):
+        return HashModeSet.from_dict(json.loads(path.read_text(encoding="utf-8")))
+    return None

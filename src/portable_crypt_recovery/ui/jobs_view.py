@@ -701,6 +701,14 @@ class _NewJobDraftDialog:  # pragma: no cover
                 # Hash modes
                 mode_group = QGroupBox("Hash Mode Strategy")
                 mode_layout = QVBoxLayout(mode_group)
+
+                # Load saved hash set shortcut
+                hs_pick_row = QHBoxLayout()
+                self._btn_load_hash_set = QPushButton("Load Saved Hash Set →")
+                hs_pick_row.addWidget(self._btn_load_hash_set)
+                hs_pick_row.addStretch()
+                mode_layout.addLayout(hs_pick_row)
+
                 self.rad_all = QRadioButton("Try all valid modes (current + legacy) — recommended")
                 self.rad_current = QRadioButton("Current modes only (no legacy)")
                 self.rad_specific = QRadioButton("Select specific modes:")
@@ -736,6 +744,14 @@ class _NewJobDraftDialog:  # pragma: no cover
                 # PIM
                 pim_group = QGroupBox("PIM (Personal Iterations Multiplier)")
                 pim_layout = QVBoxLayout(pim_group)
+
+                # Load saved PIM set shortcut
+                pim_pick_row = QHBoxLayout()
+                self._btn_load_pim_set = QPushButton("Load Saved PIM Set →")
+                pim_pick_row.addWidget(self._btn_load_pim_set)
+                pim_pick_row.addStretch()
+                pim_layout.addLayout(pim_pick_row)
+
                 self.rad_pim_default = QRadioButton("Use default PIM — recommended")
                 self.rad_pim_custom = QRadioButton("Custom PIM values:")
                 self.rad_pim_default.setChecked(True)
@@ -789,6 +805,14 @@ class _NewJobDraftDialog:  # pragma: no cover
                 # Keyfiles (optional)
                 kf_group = QGroupBox("Keyfiles (optional)")
                 kf_layout = QVBoxLayout(kf_group)
+
+                # Load saved keyfile set shortcut
+                kf_pick_row = QHBoxLayout()
+                self._btn_load_kf_set = QPushButton("Load Saved Keyfile Set →")
+                kf_pick_row.addWidget(self._btn_load_kf_set)
+                kf_pick_row.addStretch()
+                kf_layout.addLayout(kf_pick_row)
+
                 self.kf_list = QListWidget()
                 self.kf_list.setMaximumHeight(80)
                 kf_layout.addWidget(self.kf_list)
@@ -827,6 +851,9 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self.btn_cascade_2.clicked.connect(lambda: self._set_cascade_mode_checks(2))
                 self.btn_cascade_3.clicked.connect(lambda: self._set_cascade_mode_checks(3))
                 self.cmb_target.currentIndexChanged.connect(self._on_target_changed)
+                self._btn_load_hash_set.clicked.connect(self._load_hash_set_picker)
+                self._btn_load_pim_set.clicked.connect(self._load_pim_set_picker)
+                self._btn_load_kf_set.clicked.connect(self._load_kf_set_picker)
 
                 self._load_targets()
                 if draft_data:
@@ -1103,6 +1130,149 @@ class _NewJobDraftDialog:  # pragma: no cover
                 if row >= 0:
                     self.kf_list.takeItem(row)
 
+            # ------------------------------------------------------------------
+            # Set pickers (load saved sets into the dialog)
+            # ------------------------------------------------------------------
+
+            def _load_hash_set_picker(self) -> None:
+                from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                    list_named_hash_sets,
+                )
+
+                app_state = get_app_state()
+                if not app_state.is_workspace_open():
+                    QMessageBox.warning(self, "No Workspace", "Open a workspace first.")
+                    return
+
+                sets = list_named_hash_sets(app_state.workspace_root)
+                if not sets:
+                    QMessageBox.information(
+                        self, "No Hash Sets",
+                        "No saved hash sets found.\n"
+                        "Build and save one in the Hash Sets screen.",
+                    )
+                    return
+
+                items = [
+                    {"label": f"{s.nickname}  ({len(s.entries)} modes)", "data": s}
+                    for s in sets
+                ]
+                dlg = _NamedSetPicker(parent=self, items=items, title="Load Saved Hash Set")
+                if dlg.exec() != 1:
+                    return
+                hms = dlg.selected
+                if not hms:
+                    return
+
+                # Switch to specific mode and populate checklist
+                self.rad_specific.setChecked(True)
+                self._rebuild_mode_checklist()
+
+                from PySide6.QtCore import Qt as _Qt
+                mode_nums = {e.mode for e in hms.entries}
+                for i in range(self.mode_checklist.count()):
+                    entry = self.mode_checklist.item(i).data(256)
+                    self.mode_checklist.item(i).setCheckState(
+                        _Qt.CheckState.Checked
+                        if (entry and entry.mode in mode_nums)
+                        else _Qt.CheckState.Unchecked
+                    )
+
+            def _load_pim_set_picker(self) -> None:
+                from PySide6.QtWidgets import QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.services.builders.pim_builder import (
+                    list_named_pim_sets,
+                )
+
+                app_state = get_app_state()
+                if not app_state.is_workspace_open():
+                    QMessageBox.warning(self, "No Workspace", "Open a workspace first.")
+                    return
+
+                sets = list_named_pim_sets(app_state.workspace_root)
+                if not sets:
+                    QMessageBox.information(
+                        self, "No PIM Sets",
+                        "No saved PIM sets found.\n"
+                        "Build and save one in the PIM Sets screen.",
+                    )
+                    return
+
+                def _detail(ps):
+                    if ps.pim_mode == "default":
+                        return "default PIM"
+                    n = len(ps.values)
+                    return f"{n} value{'s' if n != 1 else ''}"
+
+                items = [
+                    {"label": f"{s.nickname}  ({_detail(s)})", "data": s}
+                    for s in sets
+                ]
+                dlg = _NamedSetPicker(parent=self, items=items, title="Load Saved PIM Set")
+                if dlg.exec() != 1:
+                    return
+                ps = dlg.selected
+                if not ps:
+                    return
+
+                if ps.pim_mode == "default":
+                    self.rad_pim_default.setChecked(True)
+                    self.txt_pim.clear()
+                else:
+                    self.rad_pim_custom.setChecked(True)
+                    self.txt_pim.setText(", ".join(str(v) for v in ps.values))
+
+            def _load_kf_set_picker(self) -> None:
+                from PySide6.QtWidgets import QListWidgetItem, QMessageBox
+
+                from portable_crypt_recovery.app.app_state import get_app_state
+                from portable_crypt_recovery.services.builders.keyfile_builder import (
+                    list_named_keyfile_sets,
+                )
+
+                app_state = get_app_state()
+                if not app_state.is_workspace_open():
+                    QMessageBox.warning(self, "No Workspace", "Open a workspace first.")
+                    return
+
+                sets = list_named_keyfile_sets(app_state.workspace_root)
+                if not sets:
+                    QMessageBox.information(
+                        self, "No Keyfile Sets",
+                        "No saved keyfile sets found.\n"
+                        "Build and save one in the Keyfile Sets screen.",
+                    )
+                    return
+
+                items = [
+                    {
+                        "label": (
+                            f"{s.nickname}  ({len(s.entries)} file"
+                            f"{'s' if len(s.entries) != 1 else ''})"
+                        ),
+                        "data": s,
+                    }
+                    for s in sets
+                ]
+                dlg = _NamedSetPicker(parent=self, items=items, title="Load Saved Keyfile Set")
+                if dlg.exec() != 1:
+                    return
+                ks = dlg.selected
+                if not ks:
+                    return
+
+                self.kf_list.clear()
+                for entry in ks.entries:
+                    path_str = entry.original_path or entry.normalized_workspace_path
+                    kf_item = QListWidgetItem(path_str)
+                    kf_item.setData(256, path_str)
+                    self.kf_list.addItem(kf_item)
+
             def _on_accept(self) -> None:
                 from PySide6.QtWidgets import QMessageBox
 
@@ -1279,3 +1449,58 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self.accept()
 
         return _Dlg(parent, workspace_root, draft_data)
+
+
+# ---------------------------------------------------------------------------
+# Generic named-set picker dialog (reused by hash / PIM / keyfile pickers)
+# ---------------------------------------------------------------------------
+
+class _NamedSetPicker:  # pragma: no cover
+    """Simple list-picker dialog for selecting a saved named set."""
+
+    def __new__(cls, parent=None, items=None, title="Select Set"):
+        from PySide6.QtWidgets import (
+            QDialog,
+            QDialogButtonBox,
+            QLabel,
+            QListWidget,
+            QListWidgetItem,
+            QVBoxLayout,
+        )
+
+        class _Dlg(QDialog):
+            def __init__(self, parent, items, title) -> None:
+                super().__init__(parent)
+                self.setWindowTitle(title)
+                self.resize(440, 300)
+                self.selected = None
+
+                layout = QVBoxLayout(self)
+                layout.addWidget(QLabel("Select a saved set:"))
+
+                self._lst = QListWidget()
+                for entry in (items or []):
+                    item = QListWidgetItem(entry.get("label", "?"))
+                    item.setData(256, entry.get("data"))
+                    self._lst.addItem(item)
+                layout.addWidget(self._lst, 1)
+
+                buttons = QDialogButtonBox(
+                    QDialogButtonBox.StandardButton.Ok
+                    | QDialogButtonBox.StandardButton.Cancel
+                )
+                buttons.accepted.connect(self._on_accept)
+                buttons.rejected.connect(self.reject)
+                layout.addWidget(buttons)
+
+                self._lst.itemDoubleClicked.connect(lambda _: self._on_accept())
+                if self._lst.count() > 0:
+                    self._lst.setCurrentRow(0)
+
+            def _on_accept(self) -> None:
+                item = self._lst.currentItem()
+                if item:
+                    self.selected = item.data(256)
+                    self.accept()
+
+        return _Dlg(parent, items, title)

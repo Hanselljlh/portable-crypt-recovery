@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import itertools
+import json
 import math
 import warnings
 from pathlib import Path
@@ -134,3 +136,49 @@ def build_keyfile_combinations(
                 )
             )
     return sets
+
+
+# ---------------------------------------------------------------------------
+# Named keyfile-set persistence  (user-created reusable keyfile configs)
+# ---------------------------------------------------------------------------
+
+def _named_kf_sets_dir(workspace_root: Path) -> Path:
+    d = workspace_root / "generated" / "keyfile-sets"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_named_keyfile_set(workspace_root: Path, ks: KeyfileSet) -> None:
+    """Persist a user-created named keyfile set to the workspace."""
+    from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
+    path = _named_kf_sets_dir(workspace_root) / f"{ks.set_id}.json"
+    atomic_write_json(path, ks.to_dict())
+
+
+def list_named_keyfile_sets(workspace_root: Path) -> list[KeyfileSet]:
+    """Return all saved named keyfile sets, sorted by nickname."""
+    result: list[KeyfileSet] = []
+    for p in sorted(_named_kf_sets_dir(workspace_root).glob("*.json")):
+        with contextlib.suppress(Exception):
+            result.append(KeyfileSet.from_dict(json.loads(p.read_text(encoding="utf-8"))))
+    return sorted(result, key=lambda s: s.nickname.lower())
+
+
+def delete_named_keyfile_set(workspace_root: Path, set_id: str) -> bool:
+    """Delete a named keyfile set by ID.  Returns True if deleted."""
+    path = _named_kf_sets_dir(workspace_root) / f"{set_id}.json"
+    if path.exists():
+        path.unlink()
+        return True
+    return False
+
+
+def load_named_keyfile_set(workspace_root: Path, set_id: str) -> KeyfileSet | None:
+    """Load one named keyfile set by ID, or None if not found."""
+    path = _named_kf_sets_dir(workspace_root) / f"{set_id}.json"
+    if not path.exists():
+        return None
+    with contextlib.suppress(Exception):
+        return KeyfileSet.from_dict(json.loads(path.read_text(encoding="utf-8")))
+    return None

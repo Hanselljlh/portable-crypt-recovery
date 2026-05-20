@@ -7,7 +7,10 @@ from portable_crypt_recovery import __app_name__, __version__
 SCREEN_NAMES = (
     "Setup",
     "Targets",
+    "Hash Sets",
     "Passwords",
+    "PIM Sets",
+    "Keyfile Sets",
     "Jobs",
     "Queue",
     "Reports",
@@ -36,8 +39,11 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
         )
 
         from portable_crypt_recovery.ui.cleanup_view import CleanupView
+        from portable_crypt_recovery.ui.hash_sets_view import HashSetsView
         from portable_crypt_recovery.ui.jobs_view import JobsView
+        from portable_crypt_recovery.ui.keyfile_sets_view import KeyfileSetsView
         from portable_crypt_recovery.ui.password_builder_view import PasswordBuilderView
+        from portable_crypt_recovery.ui.pim_sets_view import PimSetsView
         from portable_crypt_recovery.ui.queue_view import QueueView
         from portable_crypt_recovery.ui.reports_view import ReportsView
         from portable_crypt_recovery.ui.settings_view import SettingsView
@@ -62,7 +68,10 @@ class MainWindow:  # pragma: no cover - covered by manual GUI tests
                 views = [
                     SetupView(),
                     TargetsView(),
+                    HashSetsView(),
                     PasswordBuilderView(),
+                    PimSetsView(),
+                    KeyfileSetsView(),
                     JobsView(),
                     QueueView(),
                     ReportsView(),

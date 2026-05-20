@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 import re
 from pathlib import Path
 
@@ -123,3 +125,49 @@ def _save_pim_list(workspace_root: Path, pim_set: PimSet) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{pim_set.pim_set_id}.json"
     atomic_write_json(out_path, pim_set.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# Named PIM-set persistence  (user-created reusable PIM configs)
+# ---------------------------------------------------------------------------
+
+def _named_pim_sets_dir(workspace_root: Path) -> Path:
+    d = workspace_root / "generated" / "pim-sets"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_named_pim_set(workspace_root: Path, ps: PimSet) -> None:
+    """Persist a user-created named PIM set to the workspace."""
+    from portable_crypt_recovery.core.atomic_write import atomic_write_json
+
+    path = _named_pim_sets_dir(workspace_root) / f"{ps.pim_set_id}.json"
+    atomic_write_json(path, ps.to_dict())
+
+
+def list_named_pim_sets(workspace_root: Path) -> list[PimSet]:
+    """Return all saved named PIM sets, sorted by nickname."""
+    result: list[PimSet] = []
+    for p in sorted(_named_pim_sets_dir(workspace_root).glob("*.json")):
+        with contextlib.suppress(Exception):
+            result.append(PimSet.from_dict(json.loads(p.read_text(encoding="utf-8"))))
+    return sorted(result, key=lambda s: s.nickname.lower())
+
+
+def delete_named_pim_set(workspace_root: Path, pim_set_id: str) -> bool:
+    """Delete a named PIM set by ID.  Returns True if deleted."""
+    path = _named_pim_sets_dir(workspace_root) / f"{pim_set_id}.json"
+    if path.exists():
+        path.unlink()
+        return True
+    return False
+
+
+def load_named_pim_set(workspace_root: Path, pim_set_id: str) -> PimSet | None:
+    """Load one named PIM set by ID, or None if not found."""
+    path = _named_pim_sets_dir(workspace_root) / f"{pim_set_id}.json"
+    if not path.exists():
+        return None
+    with contextlib.suppress(Exception):
+        return PimSet.from_dict(json.loads(path.read_text(encoding="utf-8")))
+    return None
