@@ -124,6 +124,9 @@ class TargetsView:  # pragma: no cover
                             workspace_root=workspace_root,
                             target_id=target_id,
                         )
+                        # Apply wizard hints to the imported header too
+                        header.known_kdfs = result.known_kdfs
+                        header.known_xts_sizes = result.known_xts_sizes
                         extracted_headers.append(header)
                     except Exception as exc:
                         errors.append(f"Import failed: {exc}")
@@ -189,6 +192,36 @@ class TargetsView:  # pragma: no cover
                     existing = {"schema_version": 1, "targets": []}
                 existing["targets"].append(target.to_dict())
                 atomic_write_json(targets_file, existing)
+
+                # Auto-generate a named Hash Set from Recovery Hints (if any were narrowed).
+                # The set ID is stored in each header so the Jobs dialog can pre-select it.
+                suggested_mode_set_id = ""
+                if result.known_kdfs or result.known_xts_sizes:
+                    from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                        hash_set_from_hints,
+                    )
+                    _kdf_display = {
+                        "sha512": "SHA-512", "ripemd160": "RIPEMD-160",
+                        "sha256": "SHA-256", "whirlpool": "Whirlpool",
+                        "streebog512": "Streebog-512",
+                    }
+                    _xts_display = {512: "×1", 1024: "×2", 1536: "×3"}
+                    _parts = (
+                        [_kdf_display.get(k, k) for k in result.known_kdfs]
+                        + [_xts_display.get(s, str(s)) for s in result.known_xts_sizes]
+                    )
+                    _nickname = f"{source_path.name} — {', '.join(_parts)}"
+                    _hms = hash_set_from_hints(
+                        workspace_root,
+                        result.known_kdfs,
+                        result.known_xts_sizes,
+                        _nickname,
+                    )
+                    if _hms:
+                        suggested_mode_set_id = _hms.mode_set_id
+
+                for header in extracted_headers:
+                    header.suggested_mode_set_id = suggested_mode_set_id
 
                 # Persist each header's metadata + cleanup manifest entry
                 for header in extracted_headers:

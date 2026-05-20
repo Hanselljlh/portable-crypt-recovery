@@ -389,6 +389,39 @@ def filter_by_hints(
             ]
 
 
+def hash_set_from_hints(
+    workspace_root: Path,
+    known_kdfs: list[str],
+    known_xts_sizes: list[int],
+    nickname: str,
+) -> HashModeSet | None:
+    """Build and save a named HashModeSet filtered to the given Recovery Hints.
+
+    Returns None if both hint lists are empty (no narrowing would happen) or
+    if the filtered result is empty (invalid combination).
+
+    This is called automatically by the Targets view after a volume is added
+    so that the Jobs dialog can pre-select the right modes.
+    """
+    if not known_kdfs and not known_xts_sizes:
+        return None
+
+    # Start from the full set and apply hints in-place
+    base = HashModeSet(mode_set_id="tmp", entries=all_mode_entries())
+    filter_by_hints(base, known_kdfs, known_xts_sizes)
+
+    if not base.entries:
+        return None
+
+    hms = HashModeSet(
+        mode_set_id=new_id("modeset"),
+        nickname=nickname,
+        entries=base.entries,
+    )
+    save_named_hash_set(workspace_root, hms)
+    return hms
+
+
 def veracrypt_only_modes() -> frozenset[int]:
     """Return mode numbers that are only valid for VeraCrypt (not TrueCrypt)."""
     return _VC_ONLY_MODES

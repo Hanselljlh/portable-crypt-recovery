@@ -363,18 +363,6 @@ class JobsView:  # pragma: no cover
                         mode_set.entries = [
                             e for e in mode_set.entries if e.mode in specific_nums
                         ]
-                    # Apply per-header KDF/XTS hints stored at extraction time
-                    if header_meta is not None and (
-                        header_meta.known_kdfs or header_meta.known_xts_sizes
-                    ):
-                        from portable_crypt_recovery.services.builders.hash_mode_builder import (
-                            filter_by_hints,
-                        )
-                        filter_by_hints(
-                            mode_set,
-                            header_meta.known_kdfs,
-                            header_meta.known_xts_sizes,
-                        )
                     if not mode_set.entries:
                         continue  # skip headers with no valid modes
 
@@ -667,6 +655,7 @@ class _NewJobDraftDialog:  # pragma: no cover
                 self._workspace_root = workspace_root
                 self.draft = None
                 is_edit = draft_data is not None
+                self._is_new_draft = not is_edit
                 self.setWindowTitle("Edit Job Draft" if is_edit else "New Job Draft")
                 self.resize(720, 860)
 
@@ -708,6 +697,14 @@ class _NewJobDraftDialog:  # pragma: no cover
                 hs_pick_row.addWidget(self._btn_load_hash_set)
                 hs_pick_row.addStretch()
                 mode_layout.addLayout(hs_pick_row)
+
+                self._lbl_hash_hint = QLabel()
+                self._lbl_hash_hint.setStyleSheet(
+                    "color: #66aaff; font-size: 11px; padding: 2px 0;"
+                )
+                self._lbl_hash_hint.setWordWrap(True)
+                self._lbl_hash_hint.setVisible(False)
+                mode_layout.addWidget(self._lbl_hash_hint)
 
                 self.rad_all = QRadioButton("Try all valid modes (current + legacy) — recommended")
                 self.rad_current = QRadioButton("Current modes only (no legacy)")
@@ -909,6 +906,58 @@ class _NewJobDraftDialog:  # pragma: no cover
                 # Rebuild specific-mode checklist when target changes
                 if hasattr(self, "rad_specific") and self.rad_specific.isChecked():
                     self._rebuild_mode_checklist()
+                # Auto-apply wizard-generated hash set for new drafts
+                if getattr(self, "_is_new_draft", False):
+                    self._auto_apply_suggested_hash_set()
+
+            def _auto_apply_suggested_hash_set(self) -> None:
+                """Pre-select wizard-generated hash set for the current target headers."""
+                from PySide6.QtCore import Qt
+
+                from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                    load_named_hash_set,
+                )
+
+                # Collect a suggested_mode_set_id from loaded headers
+                suggested_id = ""
+                for i in range(self.lst_headers.count()):
+                    h = self.lst_headers.item(i).data(256)
+                    if h:
+                        sid = getattr(h, "suggested_mode_set_id", "")
+                        if sid:
+                            suggested_id = sid
+                            break
+
+                if not suggested_id or not self._workspace_root:
+                    # No suggested set — reset to "all modes" and hide hint label
+                    self.rad_all.setChecked(True)
+                    self._lbl_hash_hint.setVisible(False)
+                    return
+
+                hms = load_named_hash_set(self._workspace_root, suggested_id)
+                if not hms:
+                    self.rad_all.setChecked(True)
+                    self._lbl_hash_hint.setVisible(False)
+                    return
+
+                # Switch to specific mode, rebuild checklist, apply set
+                self.rad_specific.setChecked(True)
+                self._rebuild_mode_checklist()
+                mode_nums = {e.mode for e in hms.entries}
+                for i in range(self.mode_checklist.count()):
+                    entry = self.mode_checklist.item(i).data(256)
+                    self.mode_checklist.item(i).setCheckState(
+                        Qt.CheckState.Checked
+                        if (entry and entry.mode in mode_nums)
+                        else Qt.CheckState.Unchecked
+                    )
+
+                n = len(hms.entries)
+                self._lbl_hash_hint.setText(
+                    f"✓ {n} mode{'s' if n != 1 else ''} pre-selected from wizard hints"
+                    f" ({hms.nickname})  —  change below to override."
+                )
+                self._lbl_hash_hint.setVisible(True)
 
             def _on_mode_strategy_changed(self, checked: bool) -> None:
                 """Show or hide the specific-mode checklist."""

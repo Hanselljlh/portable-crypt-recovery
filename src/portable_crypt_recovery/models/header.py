@@ -29,6 +29,9 @@ class Header:
     known_kdfs: list = field(default_factory=list)
     # Empty list = try all.  Values: 512 1024 1536  (XTS key size in bits)
     known_xts_sizes: list = field(default_factory=list)
+    # ID of the auto-generated HashModeSet built from the wizard hints.
+    # Empty string = no suggested set (use all-modes strategy).
+    suggested_mode_set_id: str = ""
 
     def validate_size(self) -> None:
         """Raise ValueError if header is not exactly 512 bytes."""
@@ -51,6 +54,7 @@ class Header:
             "notes": self.notes,
             "known_kdfs": self.known_kdfs,
             "known_xts_sizes": self.known_xts_sizes,
+            "suggested_mode_set_id": self.suggested_mode_set_id,
         }
 
     @classmethod
@@ -67,4 +71,5 @@ class Header:
             notes=data.get("notes", ""),
             known_kdfs=data.get("known_kdfs", []),
             known_xts_sizes=data.get("known_xts_sizes", []),
+            suggested_mode_set_id=data.get("suggested_mode_set_id", ""),
         )

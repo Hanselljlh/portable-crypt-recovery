@@ -390,6 +390,100 @@ def test_keyfile_set_nickname_roundtrip():
 
 
 # ---------------------------------------------------------------------------
+# hash_set_from_hints — auto-link wizard → Hash Set
+# ---------------------------------------------------------------------------
+
+def test_hash_set_from_hints_returns_none_when_no_hints(tmp_path):
+    from portable_crypt_recovery.services.builders.hash_mode_builder import hash_set_from_hints
+
+    assert hash_set_from_hints(tmp_path, [], [], "empty") is None
+
+
+def test_hash_set_from_hints_creates_set_for_kdf_hint(tmp_path):
+    from portable_crypt_recovery.services.builders.hash_mode_builder import (
+        hash_set_from_hints,
+        list_named_hash_sets,
+    )
+
+    hms = hash_set_from_hints(tmp_path, ["sha512"], [], "SHA-512 only")
+    assert hms is not None
+    assert len(hms.entries) > 0
+    # All entries must be SHA-512
+    assert all("SHA512" in e.label or "SHA-512" in e.label for e in hms.entries)
+    # Persisted
+    assert len(list_named_hash_sets(tmp_path)) == 1
+
+
+def test_hash_set_from_hints_filters_xts_size(tmp_path):
+    from portable_crypt_recovery.services.builders.hash_mode_builder import hash_set_from_hints
+
+    hms = hash_set_from_hints(tmp_path, [], [512], "Single cipher only")
+    assert hms is not None
+    # All entries must be XTS 512
+    assert all("XTS 512" in e.label for e in hms.entries)
+    assert all(e.cipher_cascade == 1 for e in hms.entries)
+
+
+def test_hash_set_from_hints_combined_filter(tmp_path):
+    from portable_crypt_recovery.services.builders.hash_mode_builder import hash_set_from_hints
+
+    hms = hash_set_from_hints(tmp_path, ["ripemd160"], [512], "RIPEMD-160 single")
+    assert hms is not None
+    assert all("RIPEMD160" in e.label for e in hms.entries)
+    assert all(e.cipher_cascade == 1 for e in hms.entries)
+
+
+def test_hash_set_from_hints_uses_nickname(tmp_path):
+    from portable_crypt_recovery.services.builders.hash_mode_builder import hash_set_from_hints
+
+    hms = hash_set_from_hints(tmp_path, ["sha512"], [], "My custom name")
+    assert hms is not None
+    assert hms.nickname == "My custom name"
+
+
+# ---------------------------------------------------------------------------
+# Header model — suggested_mode_set_id round-trip
+# ---------------------------------------------------------------------------
+
+def test_header_suggested_mode_set_id_roundtrip():
+    from portable_crypt_recovery.models.header import Header
+
+    h = Header(
+        header_id="hdr1",
+        target_id="tgt1",
+        source_type="extracted",
+        workspace_relative_path="headers/normalized/hdr1.bin",
+        size_bytes=512,
+        sha256="abcd",
+        extraction_timestamp="2026-01-01T00:00:00Z",
+        suggested_mode_set_id="modeset_xyz",
+    )
+    d = h.to_dict()
+    assert d["suggested_mode_set_id"] == "modeset_xyz"
+    h2 = Header.from_dict(d)
+    assert h2.suggested_mode_set_id == "modeset_xyz"
+
+
+def test_header_suggested_mode_set_id_defaults_empty():
+    from portable_crypt_recovery.models.header import Header
+
+    h = Header(
+        header_id="hdr2",
+        target_id="tgt1",
+        source_type="extracted",
+        workspace_relative_path="headers/normalized/hdr2.bin",
+        size_bytes=512,
+        sha256="abcd",
+        extraction_timestamp="2026-01-01T00:00:00Z",
+    )
+    assert h.suggested_mode_set_id == ""
+    # Old JSON without the field defaults gracefully
+    d = {k: v for k, v in h.to_dict().items() if k != "suggested_mode_set_id"}
+    h2 = Header.from_dict(d)
+    assert h2.suggested_mode_set_id == ""
+
+
+# ---------------------------------------------------------------------------
 # SCREEN_NAMES includes the three new screens
 # ---------------------------------------------------------------------------
 
