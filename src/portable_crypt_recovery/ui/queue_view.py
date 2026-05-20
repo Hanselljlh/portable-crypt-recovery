@@ -387,6 +387,10 @@ class QueueView:  # pragma: no cover
                 self.lbl_status.setText("Queue stopped")
                 self.lbl_running.setText("No task running")
                 self.progress_bar.setValue(0)
+                # Reset so the next _on_job_selected call treats the currently
+                # displayed task as "new" and forces a full log reload, showing
+                # the final hashcat output for exhausted/cracked/failed tasks.
+                self._log_task_id = ""
                 self._refresh_list()
                 # Reset title to baseline (refresh_list will set it if jobs exist)
                 from portable_crypt_recovery import __app_name__, __version__
@@ -767,7 +771,17 @@ class QueueView:  # pragma: no cover
 
                 scroll_pos = self.job_list.verticalScrollBar().value()
 
+                # Block signals around clear() so that Qt's automatic
+                # currentItemChanged(None) signal does NOT fire during the
+                # rebuild.  Without this, every poll cycle triggers
+                # _on_job_selected(None) → txt_log.clear(), which wipes the
+                # user's scroll position and empties the log panel for
+                # terminal tasks that would otherwise hit the early-return
+                # guard and never re-populate.
+                self.job_list.blockSignals(True)
                 self.job_list.clear()
+                self.job_list.blockSignals(False)
+
                 state = get_app_state()
                 if not state.is_workspace_open():
                     return
