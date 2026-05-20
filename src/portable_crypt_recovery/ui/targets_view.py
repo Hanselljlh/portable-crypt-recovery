@@ -183,7 +183,7 @@ class TargetsView:  # pragma: no cover
                     )
                     return
 
-                # Persist target to targets/targets.json
+                # ── Persist target first so it's never lost even if later steps fail ──
                 targets_file = workspace_root / "targets" / "targets.json"
                 try:
                     import json
@@ -191,58 +191,76 @@ class TargetsView:  # pragma: no cover
                 except Exception:
                     existing = {"schema_version": 1, "targets": []}
                 existing["targets"].append(target.to_dict())
-                atomic_write_json(targets_file, existing)
+                try:
+                    atomic_write_json(targets_file, existing)
+                except Exception as exc:
+                    QMessageBox.critical(
+                        self, "Save Error",
+                        f"Could not write targets.json:\n{exc}\n\n"
+                        "Check workspace folder permissions.",
+                    )
+                    return
 
-                # Auto-generate a named Hash Set from Recovery Hints (if any were narrowed).
-                # The set ID is stored in each header so the Jobs dialog can pre-select it.
+                # ── Optional: auto-generate Hash Set from Recovery Hints ──
+                # Isolated in its own try/except — failure here must never block the save.
                 suggested_mode_set_id = ""
                 if result.known_kdfs or result.known_xts_sizes:
-                    from portable_crypt_recovery.services.builders.hash_mode_builder import (
-                        hash_set_from_hints,
-                    )
-                    _kdf_display = {
-                        "sha512": "SHA-512", "ripemd160": "RIPEMD-160",
-                        "sha256": "SHA-256", "whirlpool": "Whirlpool",
-                        "streebog512": "Streebog-512",
-                    }
-                    _xts_display = {512: "×1", 1024: "×2", 1536: "×3"}
-                    _parts = (
-                        [_kdf_display.get(k, k) for k in result.known_kdfs]
-                        + [_xts_display.get(s, str(s)) for s in result.known_xts_sizes]
-                    )
-                    _nickname = f"{source_path.name} — {', '.join(_parts)}"
-                    _hms = hash_set_from_hints(
-                        workspace_root,
-                        result.known_kdfs,
-                        result.known_xts_sizes,
-                        _nickname,
-                    )
-                    if _hms:
-                        suggested_mode_set_id = _hms.mode_set_id
+                    try:
+                        from portable_crypt_recovery.services.builders.hash_mode_builder import (
+                            hash_set_from_hints,
+                        )
+                        _kdf_display = {
+                            "sha512": "SHA-512", "ripemd160": "RIPEMD-160",
+                            "sha256": "SHA-256", "whirlpool": "Whirlpool",
+                            "streebog512": "Streebog-512",
+                        }
+                        _xts_display = {512: "×1", 1024: "×2", 1536: "×3"}
+                        _parts = (
+                            [_kdf_display.get(k, k) for k in result.known_kdfs]
+                            + [_xts_display.get(s, str(s)) for s in result.known_xts_sizes]
+                        )
+                        _nickname = f"{source_path.name} — {', '.join(_parts)}"
+                        _hms = hash_set_from_hints(
+                            workspace_root,
+                            result.known_kdfs,
+                            result.known_xts_sizes,
+                            _nickname,
+                        )
+                        if _hms:
+                            suggested_mode_set_id = _hms.mode_set_id
+                    except Exception:
+                        pass  # hash-set generation is optional; target is already saved
 
                 for header in extracted_headers:
                     header.suggested_mode_set_id = suggested_mode_set_id
 
-                # Persist each header's metadata + cleanup manifest entry
+                # ── Persist each header's metadata + cleanup manifest entry ──
+                header_errors: list[str] = []
                 for header in extracted_headers:
-                    save_header_metadata(workspace_root, header)
-                    cleanup_manifest.add_entry(
-                        workspace_root,
-                        relative_path=header.workspace_relative_path,
-                        category="normalized-header",
-                        description=f"{header.candidate_type} for target {target.display_name}",
-                        created_by="targets_view",
-                    )
+                    try:
+                        save_header_metadata(workspace_root, header)
+                        cleanup_manifest.add_entry(
+                            workspace_root,
+                            relative_path=header.workspace_relative_path,
+                            category="normalized-header",
+                            description=(
+                                f"{header.candidate_type} for target {target.display_name}"
+                            ),
+                            created_by="targets_view",
+                        )
+                    except Exception as exc:
+                        header_errors.append(str(exc))
 
-                # Update in-memory counts
+                # ── Update in-memory counts ──
                 state.target_count += 1
                 state.header_count += len(extracted_headers)
 
-                # Refresh list
+                # ── Always refresh the list so the new target is visible ──
                 self._refresh_list()
 
                 n = len(extracted_headers)
-                err_note = "\n\nWarnings:\n" + "\n".join(errors) if errors else ""
+                all_warnings = errors + header_errors
+                err_note = "\n\nWarnings:\n" + "\n".join(all_warnings) if all_warnings else ""
                 QMessageBox.information(
                     self,
                     "Volume Added",
