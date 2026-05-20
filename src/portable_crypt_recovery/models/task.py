@@ -13,6 +13,7 @@ JOB_STATUSES = (
     "exhausted",
     "failed",
     "skipped",
+    "aborted",
 )
 
 

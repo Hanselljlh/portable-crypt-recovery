@@ -100,6 +100,27 @@ def permutation_variants(word: str) -> list[str]:
     return dedupe_preserve_order(["".join(p) for p in itertools.permutations(word)])
 
 
+def estimate_qc_expansion_count(text: str) -> int:
+    """Return the count that ``expand_pattern_tokens(text)`` would produce, without expanding.
+
+    Uses ``52 ** num_tokens``; returns 1 when no ``?C`` token is present.
+    Safe to call on arbitrarily long patterns — no allocation is performed.
+    """
+    n = text.count("?C")
+    return 1 if n == 0 else 52 ** n
+
+
+def estimate_permutation_count(word: str) -> int:
+    """Return ``factorial(len(word))`` — an upper bound for ``permutation_variants(word)``.
+
+    The true unique-permutation count may be smaller when characters repeat, but
+    this upper bound is sufficient as a pre-expansion safety guard.
+    Safe to call on any length — no allocation is performed.
+    """
+    import math
+    return math.factorial(len(word))
+
+
 def dedupe_preserve_order(values: list[str]) -> list[str]:
     seen: set[str] = set()
     output: list[str] = []

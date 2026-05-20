@@ -530,6 +530,7 @@ class PasswordBuilderView:  # pragma: no cover
                 from PySide6.QtWidgets import QMessageBox
 
                 from portable_crypt_recovery.services.builders.password_builder import (
+                    estimate_qc_expansion_count,
                     expand_pattern_tokens,
                 )
                 text = self.txt_variant.text().strip()
@@ -551,16 +552,24 @@ class PasswordBuilderView:  # pragma: no cover
                         "Add ?C where you want a letter wildcard."
                     )
                     return
-                variants = expand_pattern_tokens(text)
-                if len(variants) > 500:
+                estimated = estimate_qc_expansion_count(text)
+                if estimated > 10_000_000:
+                    QMessageBox.warning(
+                        self, "?C Pattern — Too Large",
+                        f"This pattern would generate {estimated:,} variants, which exceeds "
+                        "the 10 M hard limit.\nUse 4 or fewer ?C tokens."
+                    )
+                    return
+                if estimated > 500:
                     reply = QMessageBox.question(
                         self, "?C Pattern",
-                        f"This will add {len(variants):,} variants.  Continue?",
+                        f"This will add {estimated:,} variants.  Continue?",
                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                         QMessageBox.StandardButton.No,
                     )
                     if reply != QMessageBox.StandardButton.Yes:
                         return
+                variants = expand_pattern_tokens(text)
                 self._add_variants_to_seg(variants)
                 self.txt_variant.clear()
 
@@ -568,6 +577,7 @@ class PasswordBuilderView:  # pragma: no cover
                 from PySide6.QtWidgets import QMessageBox
 
                 from portable_crypt_recovery.services.builders.password_builder import (
+                    estimate_permutation_count,
                     permutation_variants,
                 )
                 text = self.txt_variant.text().strip()
@@ -579,16 +589,24 @@ class PasswordBuilderView:  # pragma: no cover
                         "Example: 'abc' → abc, acb, bac, bca, cab, cba"
                     )
                     return
-                variants = permutation_variants(text)
-                if len(variants) > 1000:
+                estimated = estimate_permutation_count(text)
+                if estimated > 10_000_000:
+                    QMessageBox.warning(
+                        self, "Permutations — Too Large",
+                        f"'{text}' ({len(text)} chars) has up to {estimated:,} permutations, "
+                        "which exceeds the 10 M hard limit.\nUse a string of 9 or fewer characters."
+                    )
+                    return
+                if estimated > 1000:
                     reply = QMessageBox.question(
                         self, "Permutations",
-                        f"'{text}' produces {len(variants):,} permutations.  Continue?",
+                        f"'{text}' produces up to {estimated:,} permutations.  Continue?",
                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                         QMessageBox.StandardButton.No,
                     )
                     if reply != QMessageBox.StandardButton.Yes:
                         return
+                variants = permutation_variants(text)
                 self._add_variants_to_seg(variants)
                 self.txt_variant.clear()
 

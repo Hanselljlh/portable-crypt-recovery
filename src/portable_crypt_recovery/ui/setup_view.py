@@ -111,7 +111,7 @@ class SetupView:  # pragma: no cover
 
                 # Hashcat
                 hs = state.hashcat_setup
-                hc_exe = hs.hashcat_path or ""
+                hc_exe = hs.executable_path or ""
                 if hc_exe:
                     self.lbl_hc_status.setText("Configured")
                     self.lbl_hc_status.setStyleSheet("color: green;")

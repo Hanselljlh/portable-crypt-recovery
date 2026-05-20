@@ -259,28 +259,35 @@ class QueueView:  # pragma: no cover
                 use_cpu_opencl = state.hashcat_setup.use_cpu_opencl
                 ignore_cuda = state.hashcat_setup.ignore_cuda
 
-                # Deduplication: skip jobs whose (header_id, effective_mode)
-                # pair has already been seen.  Without this, every draft that
-                # targets the same header will re-run the same hashcat mode
-                # against the same header file — identical work with no benefit.
-                # effective_mode accounts for the 294xx→137xx substitution so
-                # we don't run both the current and legacy variant.
+                # Deduplication: skip tasks that are genuinely identical — same
+                # header, mode, wordlist, PIM range, and keyfile set.  Tasks that
+                # share only header+mode but differ in any command-affecting field
+                # are distinct attacks and must still run.
                 from portable_crypt_recovery.core.timestamps import utc_now_iso as _now
                 from portable_crypt_recovery.services.hashcat.command_builder import (
                     _CURRENT_TO_LEGACY,
                 )
 
-                seen_header_mode: set[tuple[str, int]] = set()
+                seen_exact: set[tuple] = set()
                 errors: list[str] = []
                 for task in pending:
                     eff_mode = _CURRENT_TO_LEGACY.get(task.hashcat_mode, task.hashcat_mode) \
                         if ignore_cuda else task.hashcat_mode
-                    key = (task.header_id, eff_mode)
-                    if key in seen_header_mode:
+                    key = (
+                        task.header_id,
+                        eff_mode,
+                        task.wordlist_path,
+                        task.keyfile_set_id,
+                        task.pim_mode,
+                        task.pim_value,
+                        task.pim_start,
+                        task.pim_stop,
+                    )
+                    if key in seen_exact:
                         task.status = "skipped"
                         task.updated_timestamp = _now()
                         continue
-                    seen_header_mode.add(key)
+                    seen_exact.add(key)
                     try:
                         task.command_array = build_command_with_devices(
                             task, hashcat_exe, ws, device_ids,

@@ -15,7 +15,7 @@ class HashcatSetup:
     version_string: str | None = None
     verified: bool = False
     verified_timestamp: str | None = None
-    selected_device_ids: list[int] = field(default_factory=lambda: [1])
+    selected_device_ids: list[int] = field(default_factory=list)
     # Performance flags passed to hashcat at run time
     use_optimized_kernels: bool = True   # -O  (2-4× faster; max ~31-char passwords)
     use_cpu_opencl: bool = False         # -D 1 (CPU OpenCL; 3-5× faster if runtime installed)
@@ -45,7 +45,7 @@ class HashcatSetup:
             version_string=data.get("version_string"),
             verified=data.get("verified", False),
             verified_timestamp=data.get("verified_timestamp"),
-            selected_device_ids=data.get("selected_device_ids") or [1],
+            selected_device_ids=data.get("selected_device_ids") or [],
             use_optimized_kernels=data.get("use_optimized_kernels", True),
             use_cpu_opencl=data.get("use_cpu_opencl", False),
             ignore_cuda=data.get("ignore_cuda", False),
