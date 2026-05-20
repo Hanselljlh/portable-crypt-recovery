@@ -36,13 +36,30 @@ from portable_crypt_recovery.models.hash_mode_set import HashModeEntry, HashMode
 # modes once the volume is open.
 # ---------------------------------------------------------------------------
 
-# Cipher suffix strings reused across tables.
-# XTS 512 = single cipher (AES, Serpent, or Twofish — mode covers all three)
-# XTS 1024 = two-cipher cascade (AES-Twofish, Serpent-AES, or Twofish-Serpent)
-# XTS 1536 = three-cipher cascade (AES-Twofish-Serpent only)
+# TrueCrypt cipher suffix strings.
+# TrueCrypt supports only AES / Serpent / Twofish — no Camellia or Kuznyechik.
+# Each Hashcat mode for a given (KDF × XTS key-size) combo tries every cipher
+# in the group; the cipher identity is resolved from the decrypted header.
 _C1 = "AES / Serpent / Twofish"
 _C2 = "AES-Twofish / Serpent-AES / Twofish-Serpent"
 _C3 = "AES-Twofish-Serpent"
+
+# VeraCrypt-specific cipher suffix strings.
+# VeraCrypt 1.17 added Camellia; 1.19 added Kuznyechik (Grasshopper / GOST).
+# Same rule as TrueCrypt: one Hashcat mode covers all ciphers at a given XTS size.
+_VC_C1 = "AES / Camellia / Kuznyechik / Serpent / Twofish"
+# 9 two-cipher cascades: 3 classic + 6 involving Camellia/Kuznyechik (VC only).
+_VC_C2 = (
+    "AES-Twofish / Camellia-Kuznyechik / Camellia-Serpent"
+    " / Kuznyechik-AES / Kuznyechik-Serpent / Kuznyechik-Twofish"
+    " / Serpent-AES / Twofish-Kuznyechik / Twofish-Serpent"
+)
+# 6 three-cipher cascades: 1 classic + 5 involving Camellia/Kuznyechik (VC only).
+_VC_C3 = (
+    "AES-Twofish-Serpent / Camellia-Kuznyechik-Twofish"
+    " / Kuznyechik-AES-Twofish / Kuznyechik-Serpent-Camellia"
+    " / Serpent-Twofish-AES / Twofish-Serpent-AES"
+)
 
 # Current TrueCrypt non-system modes  (RIPEMD-160 is TC default)
 _TC_CURRENT_NONSYSTEM: list[tuple[int, str]] = [
@@ -93,77 +110,77 @@ _TC_LEGACY_SYSTEM: list[tuple[int, str]] = [
 # Current VeraCrypt non-system modes  (SHA-512 is current VC default KDF)
 _VC_CURRENT_NONSYSTEM: list[tuple[int, str]] = [
     # XTS 512 bit — single cipher, most common
-    (29421, f"VeraCrypt SHA512 | XTS 512 bit — {_C1}"),       # current VeraCrypt default
-    (29411, f"VeraCrypt RIPEMD160 | XTS 512 bit — {_C1}"),    # older VeraCrypt default
-    (29451, f"VeraCrypt SHA256 | XTS 512 bit — {_C1}"),
-    (29431, f"VeraCrypt Whirlpool | XTS 512 bit — {_C1}"),
-    (29471, f"VeraCrypt Streebog-512 | XTS 512 bit — {_C1}"),
+    (29421, f"VeraCrypt SHA512 | XTS 512 bit — {_VC_C1}"),       # current VeraCrypt default
+    (29411, f"VeraCrypt RIPEMD160 | XTS 512 bit — {_VC_C1}"),    # older VeraCrypt default
+    (29451, f"VeraCrypt SHA256 | XTS 512 bit — {_VC_C1}"),
+    (29431, f"VeraCrypt Whirlpool | XTS 512 bit — {_VC_C1}"),
+    (29471, f"VeraCrypt Streebog-512 | XTS 512 bit — {_VC_C1}"),
     # XTS 1024 bit — two-cipher cascade
-    (29422, f"VeraCrypt SHA512 | XTS 1024 bit — {_C2}"),
-    (29412, f"VeraCrypt RIPEMD160 | XTS 1024 bit — {_C2}"),
-    (29452, f"VeraCrypt SHA256 | XTS 1024 bit — {_C2}"),
-    (29432, f"VeraCrypt Whirlpool | XTS 1024 bit — {_C2}"),
-    (29472, f"VeraCrypt Streebog-512 | XTS 1024 bit — {_C2}"),
+    (29422, f"VeraCrypt SHA512 | XTS 1024 bit — {_VC_C2}"),
+    (29412, f"VeraCrypt RIPEMD160 | XTS 1024 bit — {_VC_C2}"),
+    (29452, f"VeraCrypt SHA256 | XTS 1024 bit — {_VC_C2}"),
+    (29432, f"VeraCrypt Whirlpool | XTS 1024 bit — {_VC_C2}"),
+    (29472, f"VeraCrypt Streebog-512 | XTS 1024 bit — {_VC_C2}"),
     # XTS 1536 bit — three-cipher cascade
-    (29423, f"VeraCrypt SHA512 | XTS 1536 bit — {_C3}"),
-    (29413, f"VeraCrypt RIPEMD160 | XTS 1536 bit — {_C3}"),
-    (29453, f"VeraCrypt SHA256 | XTS 1536 bit — {_C3}"),
-    (29433, f"VeraCrypt Whirlpool | XTS 1536 bit — {_C3}"),
-    (29473, f"VeraCrypt Streebog-512 | XTS 1536 bit — {_C3}"),
+    (29423, f"VeraCrypt SHA512 | XTS 1536 bit — {_VC_C3}"),
+    (29413, f"VeraCrypt RIPEMD160 | XTS 1536 bit — {_VC_C3}"),
+    (29453, f"VeraCrypt SHA256 | XTS 1536 bit — {_VC_C3}"),
+    (29433, f"VeraCrypt Whirlpool | XTS 1536 bit — {_VC_C3}"),
+    (29473, f"VeraCrypt Streebog-512 | XTS 1536 bit — {_VC_C3}"),
 ]
 
 # Current VeraCrypt system/boot modes  (RIPEMD-160 is still boot default)
 _VC_CURRENT_SYSTEM: list[tuple[int, str]] = [
     # XTS 512 bit
-    (29441, f"VeraCrypt RIPEMD160 | XTS 512 bit — {_C1} [boot]"),   # boot default
-    (29461, f"VeraCrypt SHA256 | XTS 512 bit — {_C1} [boot]"),
-    (29481, f"VeraCrypt Streebog-512 | XTS 512 bit — {_C1} [boot]"),
+    (29441, f"VeraCrypt RIPEMD160 | XTS 512 bit — {_VC_C1} [boot]"),   # boot default
+    (29461, f"VeraCrypt SHA256 | XTS 512 bit — {_VC_C1} [boot]"),
+    (29481, f"VeraCrypt Streebog-512 | XTS 512 bit — {_VC_C1} [boot]"),
     # XTS 1024 bit
-    (29442, f"VeraCrypt RIPEMD160 | XTS 1024 bit — {_C2} [boot]"),
-    (29462, f"VeraCrypt SHA256 | XTS 1024 bit — {_C2} [boot]"),
-    (29482, f"VeraCrypt Streebog-512 | XTS 1024 bit — {_C2} [boot]"),
+    (29442, f"VeraCrypt RIPEMD160 | XTS 1024 bit — {_VC_C2} [boot]"),
+    (29462, f"VeraCrypt SHA256 | XTS 1024 bit — {_VC_C2} [boot]"),
+    (29482, f"VeraCrypt Streebog-512 | XTS 1024 bit — {_VC_C2} [boot]"),
     # XTS 1536 bit
-    (29443, f"VeraCrypt RIPEMD160 | XTS 1536 bit — {_C3} [boot]"),
-    (29463, f"VeraCrypt SHA256 | XTS 1536 bit — {_C3} [boot]"),
-    (29483, f"VeraCrypt Streebog-512 | XTS 1536 bit — {_C3} [boot]"),
+    (29443, f"VeraCrypt RIPEMD160 | XTS 1536 bit — {_VC_C3} [boot]"),
+    (29463, f"VeraCrypt SHA256 | XTS 1536 bit — {_VC_C3} [boot]"),
+    (29483, f"VeraCrypt Streebog-512 | XTS 1536 bit — {_VC_C3} [boot]"),
 ]
 
 # Legacy VeraCrypt non-system modes
 _VC_LEGACY_NONSYSTEM: list[tuple[int, str]] = [
     # XTS 512 bit — single cipher, most common
-    (13721, f"VeraCrypt PBKDF2-HMAC-SHA512 | XTS 512 bit — {_C1}"),       # current VC default
-    (13711, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 512 bit — {_C1}"),    # older VC default
-    (13751, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 512 bit — {_C1}"),
-    (13731, f"VeraCrypt PBKDF2-HMAC-Whirlpool | XTS 512 bit — {_C1}"),
-    (13771, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 512 bit — {_C1}"),
+    (13721, f"VeraCrypt PBKDF2-HMAC-SHA512 | XTS 512 bit — {_VC_C1}"),       # current VC default
+    (13711, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 512 bit — {_VC_C1}"),    # older VC default
+    (13751, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 512 bit — {_VC_C1}"),
+    (13731, f"VeraCrypt PBKDF2-HMAC-Whirlpool | XTS 512 bit — {_VC_C1}"),
+    (13771, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 512 bit — {_VC_C1}"),
     # XTS 1024 bit — two-cipher cascade
-    (13722, f"VeraCrypt PBKDF2-HMAC-SHA512 | XTS 1024 bit — {_C2}"),
-    (13712, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1024 bit — {_C2}"),
-    (13752, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1024 bit — {_C2}"),
-    (13732, f"VeraCrypt PBKDF2-HMAC-Whirlpool | XTS 1024 bit — {_C2}"),
-    (13772, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1024 bit — {_C2}"),
+    (13722, f"VeraCrypt PBKDF2-HMAC-SHA512 | XTS 1024 bit — {_VC_C2}"),
+    (13712, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1024 bit — {_VC_C2}"),
+    (13752, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1024 bit — {_VC_C2}"),
+    (13732, f"VeraCrypt PBKDF2-HMAC-Whirlpool | XTS 1024 bit — {_VC_C2}"),
+    (13772, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1024 bit — {_VC_C2}"),
     # XTS 1536 bit — three-cipher cascade
-    (13723, f"VeraCrypt PBKDF2-HMAC-SHA512 | XTS 1536 bit — {_C3}"),
-    (13713, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1536 bit — {_C3}"),
-    (13753, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1536 bit — {_C3}"),
-    (13733, f"VeraCrypt PBKDF2-HMAC-Whirlpool | XTS 1536 bit — {_C3}"),
-    (13773, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1536 bit — {_C3}"),
+    (13723, f"VeraCrypt PBKDF2-HMAC-SHA512 | XTS 1536 bit — {_VC_C3}"),
+    (13713, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1536 bit — {_VC_C3}"),
+    (13753, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1536 bit — {_VC_C3}"),
+    (13733, f"VeraCrypt PBKDF2-HMAC-Whirlpool | XTS 1536 bit — {_VC_C3}"),
+    (13773, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1536 bit — {_VC_C3}"),
 ]
 
 # Legacy VeraCrypt system/boot modes
 _VC_LEGACY_SYSTEM: list[tuple[int, str]] = [
     # XTS 512 bit
-    (13741, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 512 bit — {_C1} [boot]"),  # boot default
-    (13761, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 512 bit — {_C1} [boot]"),
-    (13781, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 512 bit — {_C1} [boot]"),
+    (13741, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 512 bit — {_VC_C1} [boot]"),  # boot default
+    (13761, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 512 bit — {_VC_C1} [boot]"),
+    (13781, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 512 bit — {_VC_C1} [boot]"),
     # XTS 1024 bit
-    (13742, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1024 bit — {_C2} [boot]"),
-    (13762, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1024 bit — {_C2} [boot]"),
-    (13782, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1024 bit — {_C2} [boot]"),
+    (13742, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1024 bit — {_VC_C2} [boot]"),
+    (13762, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1024 bit — {_VC_C2} [boot]"),
+    (13782, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1024 bit — {_VC_C2} [boot]"),
     # XTS 1536 bit
-    (13743, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1536 bit — {_C3} [boot]"),
-    (13763, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1536 bit — {_C3} [boot]"),
-    (13783, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1536 bit — {_C3} [boot]"),
+    (13743, f"VeraCrypt PBKDF2-HMAC-RIPEMD160 | XTS 1536 bit — {_VC_C3} [boot]"),
+    (13763, f"VeraCrypt PBKDF2-HMAC-SHA256 | XTS 1536 bit — {_VC_C3} [boot]"),
+    (13783, f"VeraCrypt PBKDF2-HMAC-Streebog-512 | XTS 1536 bit — {_VC_C3} [boot]"),
 ]
 
 # All VeraCrypt-only mode numbers (not valid for TrueCrypt)

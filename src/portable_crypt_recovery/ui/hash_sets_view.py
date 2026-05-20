@@ -37,7 +37,7 @@ class HashSetsView:  # pragma: no cover
                 builder_layout = QVBoxLayout(builder_widget)
                 builder_layout.setContentsMargins(0, 0, 0, 0)
 
-                # ---- Filter row: 5 separate group-boxes side by side ----
+                # ---- Filter row 1: Brand | Algorithm | Volume Type | Generation ----
                 filter_row = QHBoxLayout()
                 filter_row.setSpacing(6)
 
@@ -83,55 +83,6 @@ class HashSetsView:  # pragma: no cover
                 _al.addLayout(_algo_row2)
                 filter_row.addWidget(grp_algo, 1)
 
-                # Encryption type (cipher names)
-                grp_cipher = QGroupBox("Encryption Type")
-                _cil = QVBoxLayout(grp_cipher)
-                _cil.setSpacing(3)
-                _cil.setContentsMargins(6, 4, 6, 4)
-
-                _note = QLabel("Ciphers in the same group share one Hashcat mode.")
-                _note.setStyleSheet("font-size: 10px; color: #888;")
-                _cil.addWidget(_note)
-
-                _r1 = QHBoxLayout()
-                _r1.setSpacing(6)
-                _r1.addWidget(QLabel("Single:"))
-                self.chk_aes = QCheckBox("AES")
-                self.chk_aes.setChecked(True)
-                self.chk_serpent = QCheckBox("Serpent")
-                self.chk_serpent.setChecked(True)
-                self.chk_twofish = QCheckBox("Twofish")
-                self.chk_twofish.setChecked(True)
-                for _w in [self.chk_aes, self.chk_serpent, self.chk_twofish]:
-                    _r1.addWidget(_w)
-                _r1.addStretch()
-                _cil.addLayout(_r1)
-
-                _r2 = QHBoxLayout()
-                _r2.setSpacing(6)
-                _r2.addWidget(QLabel("Two-cipher:"))
-                self.chk_at = QCheckBox("AES-Twofish")
-                self.chk_at.setChecked(True)
-                self.chk_sa = QCheckBox("Serpent-AES")
-                self.chk_sa.setChecked(True)
-                self.chk_ts = QCheckBox("Twofish-Serpent")
-                self.chk_ts.setChecked(True)
-                for _w in [self.chk_at, self.chk_sa, self.chk_ts]:
-                    _r2.addWidget(_w)
-                _r2.addStretch()
-                _cil.addLayout(_r2)
-
-                _r3 = QHBoxLayout()
-                _r3.setSpacing(6)
-                _r3.addWidget(QLabel("Three-cipher:"))
-                self.chk_ats = QCheckBox("AES-Twofish-Serpent")
-                self.chk_ats.setChecked(True)
-                _r3.addWidget(self.chk_ats)
-                _r3.addStretch()
-                _cil.addLayout(_r3)
-
-                filter_row.addWidget(grp_cipher, 1)
-
                 # Volume type
                 grp_volume = QGroupBox("Volume Type")
                 _vl = QVBoxLayout(grp_volume)
@@ -159,6 +110,118 @@ class HashSetsView:  # pragma: no cover
                 filter_row.addWidget(grp_gen)
 
                 builder_layout.addLayout(filter_row)
+
+                # ---- Filter row 2: Encryption Type (full-width, all cipher combinations) ----
+                # Each cascade level = one Hashcat mode that covers all ciphers in that group.
+                # Camellia and Kuznyechik are VeraCrypt-only (added in VC 1.17 / 1.19).
+                grp_cipher = QGroupBox("Encryption Type")
+                _cil = QVBoxLayout(grp_cipher)
+                _cil.setSpacing(3)
+                _cil.setContentsMargins(6, 4, 6, 4)
+
+                _cnote = QLabel(
+                    "All ciphers at the same cascade level share one Hashcat mode — checking any"
+                    " cipher in a group includes that level's modes."
+                    "  † = VeraCrypt only (not available in TrueCrypt)."
+                )
+                _cnote.setStyleSheet("font-size: 10px; color: #888;")
+                _cnote.setWordWrap(True)
+                _cil.addWidget(_cnote)
+
+                # Single cipher row (cascade=1, XTS 512-bit)
+                _r1 = QHBoxLayout()
+                _r1.setSpacing(8)
+                _r1.addWidget(QLabel("Single:"))
+                self.chk_aes = QCheckBox("AES")
+                self.chk_aes.setChecked(True)
+                self.chk_camellia = QCheckBox("Camellia †")
+                self.chk_camellia.setChecked(True)
+                self.chk_kuznyechik = QCheckBox("Kuznyechik †")
+                self.chk_kuznyechik.setChecked(True)
+                self.chk_serpent = QCheckBox("Serpent")
+                self.chk_serpent.setChecked(True)
+                self.chk_twofish = QCheckBox("Twofish")
+                self.chk_twofish.setChecked(True)
+                for _w in [
+                    self.chk_aes, self.chk_camellia, self.chk_kuznyechik,
+                    self.chk_serpent, self.chk_twofish,
+                ]:
+                    _r1.addWidget(_w)
+                _r1.addStretch()
+                _cil.addLayout(_r1)
+
+                # Two-cipher row A — classic (TC + VC)
+                _r2a = QHBoxLayout()
+                _r2a.setSpacing(8)
+                _r2a.addWidget(QLabel("Two-cipher:"))
+                self.chk_at = QCheckBox("AES-Twofish")
+                self.chk_at.setChecked(True)
+                self.chk_sa = QCheckBox("Serpent-AES")
+                self.chk_sa.setChecked(True)
+                self.chk_ts = QCheckBox("Twofish-Serpent")
+                self.chk_ts.setChecked(True)
+                for _w in [self.chk_at, self.chk_sa, self.chk_ts]:
+                    _r2a.addWidget(_w)
+                _r2a.addStretch()
+                _cil.addLayout(_r2a)
+
+                # Two-cipher row B — VeraCrypt-only combinations
+                _r2b = QHBoxLayout()
+                _r2b.setSpacing(8)
+                _r2b.addSpacing(78)  # align under row A ciphers
+                self.chk_ck = QCheckBox("Camellia-Kuznyechik †")
+                self.chk_ck.setChecked(True)
+                self.chk_cs = QCheckBox("Camellia-Serpent †")
+                self.chk_cs.setChecked(True)
+                self.chk_ka = QCheckBox("Kuznyechik-AES †")
+                self.chk_ka.setChecked(True)
+                self.chk_ks = QCheckBox("Kuznyechik-Serpent †")
+                self.chk_ks.setChecked(True)
+                self.chk_kt = QCheckBox("Kuznyechik-Twofish †")
+                self.chk_kt.setChecked(True)
+                self.chk_tk = QCheckBox("Twofish-Kuznyechik †")
+                self.chk_tk.setChecked(True)
+                for _w in [
+                    self.chk_ck, self.chk_cs, self.chk_ka,
+                    self.chk_ks, self.chk_kt, self.chk_tk,
+                ]:
+                    _r2b.addWidget(_w)
+                _r2b.addStretch()
+                _cil.addLayout(_r2b)
+
+                # Three-cipher row A — classic (TC + VC)
+                _r3a = QHBoxLayout()
+                _r3a.setSpacing(8)
+                _r3a.addWidget(QLabel("Three-cipher:"))
+                self.chk_ats = QCheckBox("AES-Twofish-Serpent")
+                self.chk_ats.setChecked(True)
+                _r3a.addWidget(self.chk_ats)
+                _r3a.addStretch()
+                _cil.addLayout(_r3a)
+
+                # Three-cipher row B — VeraCrypt-only combinations
+                _r3b = QHBoxLayout()
+                _r3b.setSpacing(8)
+                _r3b.addSpacing(90)  # align under row A ciphers
+                self.chk_ckt = QCheckBox("Camellia-Kuznyechik-Twofish †")
+                self.chk_ckt.setChecked(True)
+                self.chk_kat = QCheckBox("Kuznyechik-AES-Twofish †")
+                self.chk_kat.setChecked(True)
+                self.chk_ksc = QCheckBox("Kuznyechik-Serpent-Camellia †")
+                self.chk_ksc.setChecked(True)
+                self.chk_sta = QCheckBox("Serpent-Twofish-AES †")
+                self.chk_sta.setChecked(True)
+                self.chk_tsa = QCheckBox("Twofish-Serpent-AES †")
+                self.chk_tsa.setChecked(True)
+                for _w in [
+                    self.chk_ckt, self.chk_kat, self.chk_ksc,
+                    self.chk_sta, self.chk_tsa,
+                ]:
+                    _r3b.addWidget(_w)
+                _r3b.addStretch()
+                _cil.addLayout(_r3b)
+
+                builder_layout.addWidget(grp_cipher)
 
                 # Mode checklist
                 self.mode_list = QListWidget()
@@ -222,8 +285,19 @@ class HashSetsView:  # pragma: no cover
                     self.chk_vc, self.chk_tc,
                     self.chk_sha512, self.chk_ripemd, self.chk_sha256,
                     self.chk_whirlpool, self.chk_streebog,
-                    self.chk_aes, self.chk_serpent, self.chk_twofish,
-                    self.chk_at, self.chk_sa, self.chk_ts, self.chk_ats,
+                    # single-cipher
+                    self.chk_aes, self.chk_camellia, self.chk_kuznyechik,
+                    self.chk_serpent, self.chk_twofish,
+                    # two-cipher classic
+                    self.chk_at, self.chk_sa, self.chk_ts,
+                    # two-cipher VC-only
+                    self.chk_ck, self.chk_cs, self.chk_ka,
+                    self.chk_ks, self.chk_kt, self.chk_tk,
+                    # three-cipher classic
+                    self.chk_ats,
+                    # three-cipher VC-only
+                    self.chk_ckt, self.chk_kat, self.chk_ksc,
+                    self.chk_sta, self.chk_tsa,
                     self.chk_standard, self.chk_boot,
                     self.chk_current, self.chk_legacy,
                 ]:
@@ -301,15 +375,23 @@ class HashSetsView:  # pragma: no cover
 
                 want_c1 = (
                     self.chk_aes.isChecked()
+                    or self.chk_camellia.isChecked()
+                    or self.chk_kuznyechik.isChecked()
                     or self.chk_serpent.isChecked()
                     or self.chk_twofish.isChecked()
                 )
                 want_c2 = (
-                    self.chk_at.isChecked()
-                    or self.chk_sa.isChecked()
-                    or self.chk_ts.isChecked()
+                    self.chk_at.isChecked() or self.chk_sa.isChecked()
+                    or self.chk_ts.isChecked() or self.chk_ck.isChecked()
+                    or self.chk_cs.isChecked() or self.chk_ka.isChecked()
+                    or self.chk_ks.isChecked() or self.chk_kt.isChecked()
+                    or self.chk_tk.isChecked()
                 )
-                want_c3 = self.chk_ats.isChecked()
+                want_c3 = (
+                    self.chk_ats.isChecked() or self.chk_ckt.isChecked()
+                    or self.chk_kat.isChecked() or self.chk_ksc.isChecked()
+                    or self.chk_sta.isChecked() or self.chk_tsa.isChecked()
+                )
                 c_want = {1: want_c1, 2: want_c2, 3: want_c3}
                 if not c_want.get(entry.cipher_cascade, True):
                     return False
