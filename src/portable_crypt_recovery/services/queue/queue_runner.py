@@ -13,6 +13,8 @@ from portable_crypt_recovery.core.timestamps import utc_now_iso
 from portable_crypt_recovery.models.queue_state import QueueState
 from portable_crypt_recovery.models.task import QueuedTask
 from portable_crypt_recovery.services.hashcat.process_runner import HashcatProcessRunner
+from portable_crypt_recovery.services.logs.app_logger import get_app_logger
+from portable_crypt_recovery.services.logs.queue_logger import get_queue_logger
 from portable_crypt_recovery.services.queue.result_classifier import classify_result
 from portable_crypt_recovery.services.queue.runner_lock import acquire_lock, release_lock
 
@@ -117,6 +119,11 @@ class QueueRunner:
             return False
         self._queue_state.status = "running"
         self._save_queue_state()
+        pending = sum(
+            1 for t in self._queue_state.tasks.values() if t.status == "pending"
+        )
+        get_app_logger().info("Queue started — %d task(s) pending", pending)
+        get_queue_logger().info("Queue started — %d task(s) pending", pending)
         t = threading.Thread(target=self._run_loop, daemon=True)
         t.start()
         return True
@@ -194,6 +201,23 @@ class QueueRunner:
             self._queue_state.current_running_task = None
             self._save_queue_state()
             release_lock(self._workspace_root)
+            cracked = sum(
+                1 for t in self._queue_state.tasks.values() if t.status == "cracked"
+            )
+            exhausted = sum(
+                1 for t in self._queue_state.tasks.values() if t.status == "exhausted"
+            )
+            skipped = sum(
+                1 for t in self._queue_state.tasks.values() if t.status == "skipped"
+            )
+            get_app_logger().info(
+                "Queue stopped — cracked=%d exhausted=%d skipped=%d",
+                cracked, exhausted, skipped,
+            )
+            get_queue_logger().info(
+                "Queue stopped — cracked=%d exhausted=%d skipped=%d",
+                cracked, exhausted, skipped,
+            )
             if self._on_status_update:
                 self._on_status_update(self._queue_state)
 
@@ -256,6 +280,11 @@ class QueueRunner:
                 f"potfile     : {self._workspace_root / task.potfile_path}\n"
                 f"=== HASHCAT OUTPUT BELOW ===\n"
             )
+
+        get_queue_logger().info(
+            "Task started  task=%s  mode=%s  header=%s  target=%s",
+            task.task_id, task.hashcat_mode, task.header_id, task.target_id,
+        )
 
         if not args:
             # No command was built for this task — mark failed and write the
@@ -347,6 +376,28 @@ class QueueRunner:
             fh.write("===================\n")
 
         task.updated_timestamp = utc_now_iso()
+
+        # Write queue log entry for this task's outcome
+        elapsed_str = f"{elapsed_s:.1f}s"
+        if task.status == "cracked":
+            # Never log the actual password — only confirm a crack occurred
+            pim_note = ""
+            if task.pim_value is not None:
+                pim_note = f"  pim={task.pim_value}"
+            get_queue_logger().info(
+                "Task CRACKED  task=%s  mode=%s  header=%s  elapsed=%s%s",
+                task.task_id, task.hashcat_mode, task.header_id, elapsed_str, pim_note,
+            )
+            get_app_logger().info(
+                "Password found for header %s (task %s, mode %s)",
+                task.header_id, task.task_id, task.hashcat_mode,
+            )
+        else:
+            get_queue_logger().info(
+                "Task %-9s task=%s  mode=%s  header=%s  elapsed=%s",
+                task.status.upper(), task.task_id, task.hashcat_mode,
+                task.header_id, elapsed_str,
+            )
 
     def _save_queue_state(self) -> None:
         path = self._workspace_root / "queue" / "queue-state.json"

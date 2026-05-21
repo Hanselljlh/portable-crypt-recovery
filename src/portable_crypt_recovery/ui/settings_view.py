@@ -660,12 +660,25 @@ class SettingsView:  # pragma: no cover
                     get_app_logger,
                     reset_app_logger,
                 )
+                from portable_crypt_recovery.services.logs.error_logger import (
+                    install_excepthook,
+                    reset_error_logger,
+                )
+                from portable_crypt_recovery.services.logs.queue_logger import (
+                    get_queue_logger,
+                    reset_queue_logger,
+                )
                 state = self._state()
                 state.load_from_workspace(ws.root, ws.record)
-                # Re-point the app logger at the new workspace so the Logs tab
+                # Re-point all loggers at the new workspace so the Logs tab
                 # shows output from the correct workspace folder.
                 reset_app_logger()
-                get_app_logger(ws.root)
+                reset_queue_logger()
+                reset_error_logger()
+                _al = get_app_logger(ws.root)
+                get_queue_logger(ws.root)
+                install_excepthook(ws.root)
+                _al.info("Workspace opened: %s", ws.root)
 
                 # Load settings.json into app_state
                 settings_path = ws.root / "settings.json"
