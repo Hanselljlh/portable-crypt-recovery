@@ -26,6 +26,7 @@ class HashModeSet:
     """A collection of Hashcat modes for a target/header combination."""
 
     mode_set_id: str
+    nickname: str = ""
     target_id: str = ""
     header_id: str = ""
     entries: list[HashModeEntry] = field(default_factory=list)
@@ -35,6 +36,7 @@ class HashModeSet:
         return {
             "schema_version": 1,
             "mode_set_id": self.mode_set_id,
+            "nickname": self.nickname,
             "target_id": self.target_id,
             "header_id": self.header_id,
             "entries": [
@@ -68,6 +70,7 @@ class HashModeSet:
         ]
         return cls(
             mode_set_id=data["mode_set_id"],
+            nickname=data.get("nickname", ""),
             target_id=data.get("target_id", ""),
             header_id=data.get("header_id", ""),
             entries=entries,

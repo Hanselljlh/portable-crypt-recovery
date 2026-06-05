@@ -2,6 +2,18 @@
 
 All notable changes to Portable VeraCrypt/TrueCrypt Recovery GUI (PCR) are documented here.
 
+## [0.3.0] - 2026-06-05
+
+### Fixed
+
+- Restored nickname persistence for named hash mode sets, PIM sets, and keyfile sets.
+- Fixed named-set save/list/load/delete flows and recovery-hint-generated hash sets.
+
+### Verified
+
+- Full test suite passes under Python 3.12 with PySide6 in offscreen mode.
+- Ruff lint passes.
+
 ## [0.1.0] - 2026-05-17
 
 ### Added

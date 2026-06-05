@@ -1,12 +1,12 @@
 # Build script for PCR Windows portable release
 # Run from repo root:  .\packaging\windows\build.ps1
-# Or with version:     .\packaging\windows\build.ps1 -Version "0.1.33"
+# Or with version:     .\packaging\windows\build.ps1 -Version "0.3.0"
 #
 # Output: dist\PCR-windows-portable\   (ready-to-zip portable folder)
 #         dist\PCR-windows-portable.zip (release archive)
 
 param(
-    [string]$Version = "0.1.33",
+    [string]$Version = "0.3.0",
     [string]$PyExePath = "",   # override if python.exe is not on PATH
     [switch]$SkipZip
 )

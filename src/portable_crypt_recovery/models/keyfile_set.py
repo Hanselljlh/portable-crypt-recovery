@@ -41,6 +41,7 @@ class KeyfileSet:
     """A set of keyfiles used together in a Hashcat job."""
 
     set_id: str
+    nickname: str = ""
     entries: list[KeyfileEntry] = field(default_factory=list)
     notes: str = ""
 
@@ -48,6 +49,7 @@ class KeyfileSet:
         return {
             "schema_version": 1,
             "set_id": self.set_id,
+            "nickname": self.nickname,
             "entries": [e.to_dict() for e in self.entries],
             "notes": self.notes,
         }
@@ -57,6 +59,7 @@ class KeyfileSet:
         entries = [KeyfileEntry.from_dict(e) for e in data.get("entries", [])]
         return cls(
             set_id=data["set_id"],
+            nickname=data.get("nickname", ""),
             entries=entries,
             notes=data.get("notes", ""),
         )
